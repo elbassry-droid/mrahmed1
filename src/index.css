@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Cairo', 'Tajawal', system-ui, -apple-system, sans-serif;
+  }
+}
+
+.font-changa {
+  font-family: 'Changa', 'Cairo', sans-serif;
+}
+
+.font-cairo {
+  font-family: 'Cairo', sans-serif;
+}
+
+.font-tajawal {
+  font-family: 'Tajawal', sans-serif;
+}
+
+/* Watermark floating animation for protected video player */
+@keyframes float-watermark {
+  0% { transform: translate(15px, 20px); opacity: 0.75; }
+  25% { transform: translate(calc(100% - 240px), 30px); opacity: 0.9; }
+  50% { transform: translate(calc(100% - 260px), calc(100% - 70px)); opacity: 0.75; }
+  75% { transform: translate(25px, calc(100% - 85px)); opacity: 0.85; }
+  100% { transform: translate(15px, 20px); opacity: 0.75; }
+}
+
+@keyframes float-watermark-secondary {
+  0% { transform: translate(calc(100% - 220px), calc(100% - 90px)); opacity: 0.5; }
+  50% { transform: translate(30px, 40px); opacity: 0.65; }
+  100% { transform: translate(calc(100% - 220px), calc(100% - 90px)); opacity: 0.5; }
+}
+
+.animate-floating-watermark {
+  animation: float-watermark 22s ease-in-out infinite alternate;
+}
+
+.animate-floating-watermark-2 {
+  animation: float-watermark-secondary 28s ease-in-out infinite alternate;
+}
+
+/* Protected Video Player Layer Shielding */
+.video-shield-top {
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.video-shield-logo {
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f2;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2d6a4f;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #1b4332;
+}
+
+/* Prevent accidental screenshot / text-selection on video player */
+.protected-screen {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
