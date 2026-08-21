@@ -17,7 +17,9 @@ import {
   Play,
   Award,
   Sparkles,
-  ArrowLeft
+  ArrowLeft,
+  UserX,
+  AlertTriangle
 } from 'lucide-react';
 
 export const StudentDashboard: React.FC = () => {
@@ -53,6 +55,26 @@ export const StudentDashboard: React.FC = () => {
           {/* Main Dashboard Content Area */}
           <div className="flex-1 w-full space-y-6 text-right order-2 lg:order-1">
             
+            {/* Blocked Account Alert Banner if Student is Blocked by Admin */}
+            {user?.isBlocked && (
+              <div className="p-5 rounded-2xl bg-red-600/10 border-2 border-red-500/80 text-red-900 dark:text-red-200 flex items-start gap-4 animate-pulse">
+                <div className="p-3 bg-red-600 text-white rounded-xl shrink-0 shadow-md">
+                  <UserX className="w-6 h-6" />
+                </div>
+                <div className="space-y-1 text-right flex-1">
+                  <h3 className="font-black text-base text-red-700 dark:text-red-300">
+                    ⚠️ حسابك محظور وموقوف مؤقتاً من قبل إدارة المنصة
+                  </h3>
+                  <p className="text-xs text-red-800 dark:text-red-200 font-bold leading-relaxed">
+                    سبب الإيقاف: <span className="underline">{user.blockedReason || 'تراكم المحاضرات والتأخر عن جدول المتابعة'}</span>
+                  </p>
+                  <p className="text-[11px] text-red-700/90 dark:text-red-300/90">
+                    تم قفل تشغيل المحاضرات لحين التواصل مع مستر أحمد عبدالحميد أو الدعم الفني وتأكيد الالتزام.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Top 3 Orange Stat Cards (Screenshot 8 Exact Match) */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               
@@ -343,16 +365,7 @@ export const StudentDashboard: React.FC = () => {
                 <span className={sidebarCollapsed ? 'hidden' : 'inline'}>الامتحانات والكويزات</span>
               </button>
 
-              {/* Item 4: المذكرات والـ PDF */}
-              <button
-                onClick={() => setActiveView('pdfs')}
-                className="w-full flex items-center gap-3 p-3 rounded-xl text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 font-bold text-xs sm:text-sm transition-all"
-              >
-                <FileText className="w-5 h-5 text-emerald-600 shrink-0" />
-                <span className={sidebarCollapsed ? 'hidden' : 'inline'}>المذكرات والـ PDF</span>
-              </button>
-
-              {/* Item 5: شحن الرصيد وبوابة الدفع */}
+              {/* Item 4: شحن الرصيد وبوابة الدفع */}
               <button
                 onClick={openRechargeModal}
                 className="w-full flex items-center gap-3 p-3 rounded-xl text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 font-bold text-xs sm:text-sm transition-all"
@@ -376,7 +389,7 @@ export const StudentDashboard: React.FC = () => {
             {!sidebarCollapsed && (
               <div className="pt-4 mt-4 border-t border-gray-100 dark:border-emerald-900/30 text-center">
                 <div className="w-16 h-16 rounded-full overflow-hidden mx-auto border-2 border-[#f39c12] mb-2">
-                  <img src={TEACHER_IMAGE} alt="مستر أحمد عبدالحميد" className="w-full h-full object-cover" />
+                  <img src={TEACHER_IMAGE} alt="مستر أحمد عبدالحميد" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 </div>
                 <p className="text-xs font-bold text-[#1b4332] dark:text-emerald-300">
                   مستر أحمد عبدالحميد

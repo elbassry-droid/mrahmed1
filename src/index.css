@@ -20,17 +20,18 @@
 
 /* Watermark floating animation for protected video player */
 @keyframes float-watermark {
-  0% { transform: translate(15px, 20px); opacity: 0.75; }
-  25% { transform: translate(calc(100% - 240px), 30px); opacity: 0.9; }
-  50% { transform: translate(calc(100% - 260px), calc(100% - 70px)); opacity: 0.75; }
-  75% { transform: translate(25px, calc(100% - 85px)); opacity: 0.85; }
-  100% { transform: translate(15px, 20px); opacity: 0.75; }
+  0% { transform: translate(20px, 30px); opacity: 0.8; }
+  25% { transform: translate(calc(80% - 180px), 50px); opacity: 0.95; }
+  50% { transform: translate(calc(75% - 200px), calc(75% - 60px)); opacity: 0.85; }
+  75% { transform: translate(35px, calc(70% - 70px)); opacity: 0.95; }
+  100% { transform: translate(20px, 30px); opacity: 0.8; }
 }
 
 @keyframes float-watermark-secondary {
-  0% { transform: translate(calc(100% - 220px), calc(100% - 90px)); opacity: 0.5; }
-  50% { transform: translate(30px, 40px); opacity: 0.65; }
-  100% { transform: translate(calc(100% - 220px), calc(100% - 90px)); opacity: 0.5; }
+  0% { transform: translate(calc(75% - 190px), calc(80% - 60px)); opacity: 0.55; }
+  35% { transform: translate(45px, 90px); opacity: 0.75; }
+  70% { transform: translate(calc(50% - 120px), calc(45% - 40px)); opacity: 0.65; }
+  100% { transform: translate(calc(75% - 190px), calc(80% - 60px)); opacity: 0.55; }
 }
 
 .animate-floating-watermark {
@@ -73,10 +74,40 @@
   background: #1b4332;
 }
 
-/* Prevent accidental screenshot / text-selection on video player */
-.protected-screen {
+/* Prevent accidental screenshot / text-selection on video player and entire platform sensitive areas */
+.protected-screen,
+body {
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Allow text selection only in form inputs */
+input, textarea {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+}
+
+/* Anti-Print Watermark when printing is attempted */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  body::after {
+    content: "محاولة طباعة أو استخراج بيانات المنصة محظورة تماماً ومحمية بحقوق الطبع والنشر لمنصة القائد";
+    visibility: visible !important;
+    position: fixed;
+    top: 40%;
+    left: 10%;
+    right: 10%;
+    font-size: 24px;
+    font-weight: bold;
+    color: #e74c3c;
+    text-align: center;
+    direction: rtl;
+  }
 }

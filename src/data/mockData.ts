@@ -1,6 +1,6 @@
 import { Course, PdfDocument, Quiz, User } from '../types';
 
-export const TEACHER_IMAGE = 'https://d.top4top.io/p_3880tveiv1.png';
+export const TEACHER_IMAGE = 'https://up6.cc/2026/08/178726567589541.png';
 
 export const ADMIN_CREDENTIALS = {
   phone: '01027568272',
@@ -43,6 +43,10 @@ export const INITIAL_USER: User = {
   centerId: 'CTR-8842-QENA',
   joinedDate: 'الأحد 2 أغسطس 2026',
   avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+  registeredDeviceId: 'dev_user_main_01',
+  registeredDeviceName: '📱 هاتف Android (Chrome)',
+  deviceLinkedAt: '2 أغسطس 2026',
+  isDeviceLocked: true,
 };
 
 export const COURSES: Course[] = [
@@ -468,9 +472,18 @@ export const MOCK_STUDENT_RECORDS: import('../types').StudentProgressRecord[] = 
     completedQuizzesCount: 1,
     totalQuizzesCount: 4,
     averageScore: 90,
-    commitmentStatus: 'ممتاز',
+    commitmentStatus: 'جيد جداً',
     lastActivityDate: 'اليوم، 04:30 م',
-    unlockedExceptionLessonIds: []
+    unlockedExceptionLessonIds: [],
+    registeredDeviceId: 'dev_user_main_01',
+    registeredDeviceName: '📱 هاتف Android (Chrome)',
+    deviceLinkedAt: '2 أغسطس 2026',
+    isDeviceLocked: true,
+    watchedMinutes: 110,
+    totalCourseMinutes: 360,
+    accumulatedLessonsCount: 3,
+    missedQuizzesCount: 3,
+    laggingStatus: 'lagging', // مراكم
   },
   {
     id: 'rec-2',
@@ -483,14 +496,23 @@ export const MOCK_STUDENT_RECORDS: import('../types').StudentProgressRecord[] = 
     gradeLabel: 'الصف الثاني الثانوي (عام)',
     enrolledCourseId: 'course-1',
     enrolledCourseTitle: 'كورس الشهر الأول - شهر 9 - علم النفس والاجتماع 2 ثانوي',
-    completedLessonsCount: 2,
+    completedLessonsCount: 4,
     totalLessonsCount: 4,
-    completedQuizzesCount: 2,
+    completedQuizzesCount: 4,
     totalQuizzesCount: 4,
-    averageScore: 95,
+    averageScore: 98,
     commitmentStatus: 'ممتاز',
     lastActivityDate: 'أمس، 08:15 م',
-    unlockedExceptionLessonIds: []
+    unlockedExceptionLessonIds: [],
+    registeredDeviceId: 'dev_user_main_02',
+    registeredDeviceName: '💻 كمبيوتر Windows (Chrome)',
+    deviceLinkedAt: '1 أغسطس 2026',
+    isDeviceLocked: true,
+    watchedMinutes: 360,
+    totalCourseMinutes: 360,
+    accumulatedLessonsCount: 0,
+    missedQuizzesCount: 0,
+    laggingStatus: 'distinguished', // متفوق
   },
   {
     id: 'rec-3',
@@ -509,8 +531,17 @@ export const MOCK_STUDENT_RECORDS: import('../types').StudentProgressRecord[] = 
     totalQuizzesCount: 4,
     averageScore: 0,
     commitmentStatus: 'مقصر بالواجبات',
-    lastActivityDate: 'منذ يومين',
-    unlockedExceptionLessonIds: []
+    lastActivityDate: 'منذ 5 أيام',
+    unlockedExceptionLessonIds: [],
+    registeredDeviceId: 'dev_user_main_03',
+    registeredDeviceName: '📱 iPhone iOS (Safari)',
+    deviceLinkedAt: '3 أغسطس 2026',
+    isDeviceLocked: true,
+    watchedMinutes: 45,
+    totalCourseMinutes: 360,
+    accumulatedLessonsCount: 3,
+    missedQuizzesCount: 4,
+    laggingStatus: 'severely_lagging', // منقطع ومتأخر جداً
   },
   {
     id: 'rec-4',
@@ -530,7 +561,16 @@ export const MOCK_STUDENT_RECORDS: import('../types').StudentProgressRecord[] = 
     averageScore: 85,
     commitmentStatus: 'جيد جداً',
     lastActivityDate: 'اليوم، 12:00 م',
-    unlockedExceptionLessonIds: []
+    unlockedExceptionLessonIds: [],
+    registeredDeviceId: 'dev_user_main_04',
+    registeredDeviceName: '📟 تابلت Android (Chrome)',
+    deviceLinkedAt: '4 أغسطس 2026',
+    isDeviceLocked: true,
+    watchedMinutes: 90,
+    totalCourseMinutes: 90,
+    accumulatedLessonsCount: 0,
+    missedQuizzesCount: 0,
+    laggingStatus: 'up_to_date', // منتظم
   },
   {
     id: 'rec-5',
@@ -549,8 +589,46 @@ export const MOCK_STUDENT_RECORDS: import('../types').StudentProgressRecord[] = 
     totalQuizzesCount: 4,
     averageScore: 0,
     commitmentStatus: 'يحتاج متابعة',
-    lastActivityDate: 'منذ 3 أيام',
-    unlockedExceptionLessonIds: []
+    lastActivityDate: 'منذ أسبوع',
+    unlockedExceptionLessonIds: [],
+    registeredDeviceId: 'dev_user_main_05',
+    registeredDeviceName: '📱 هاتف Android (Samsung Browser)',
+    deviceLinkedAt: '30 يوليو 2026',
+    isDeviceLocked: true,
+    watchedMinutes: 0,
+    totalCourseMinutes: 360,
+    accumulatedLessonsCount: 4,
+    missedQuizzesCount: 4,
+    laggingStatus: 'severely_lagging', // مراكم الحصص بالكامل
+  },
+  {
+    id: 'rec-6',
+    studentId: 'std_9026',
+    studentName: 'عمر خالد الصاوي',
+    studentPhone: '01055667788',
+    parentPhone: '01199884433',
+    governorate: 'أسيوط',
+    grade: 'second_general',
+    gradeLabel: 'الصف الثاني الثانوي (عام)',
+    enrolledCourseId: 'course-1',
+    enrolledCourseTitle: 'كورس الشهر الأول - شهر 9 - علم النفس والاجتماع 2 ثانوي',
+    completedLessonsCount: 2,
+    totalLessonsCount: 4,
+    completedQuizzesCount: 2,
+    totalQuizzesCount: 4,
+    averageScore: 88,
+    commitmentStatus: 'جيد جداً',
+    lastActivityDate: 'اليوم، 01:10 م',
+    unlockedExceptionLessonIds: [],
+    registeredDeviceId: 'dev_user_main_06',
+    registeredDeviceName: '💻 كمبيوتر Windows (Edge)',
+    deviceLinkedAt: '5 أغسطس 2026',
+    isDeviceLocked: true,
+    watchedMinutes: 180,
+    totalCourseMinutes: 360,
+    accumulatedLessonsCount: 2,
+    missedQuizzesCount: 2,
+    laggingStatus: 'lagging', // مراكم حصتين
   }
 ];
 

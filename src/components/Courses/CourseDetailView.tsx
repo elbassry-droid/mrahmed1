@@ -16,7 +16,9 @@ import {
   Zap, 
   BookOpen,
   Share2,
-  Sparkles
+  Sparkles,
+  LogIn,
+  UserPlus
 } from 'lucide-react';
 
 interface CourseDetailViewProps {
@@ -32,6 +34,8 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({ course, onBa
     openQuiz, 
     openPdf, 
     openRechargeModal,
+    openAuthModal,
+    addNotification,
     walletBalance,
     user,
     isLessonLocked
@@ -40,6 +44,12 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({ course, onBa
   const isEnrolled = enrolledCourseIds.includes(course.id);
 
   const handleEnrollClick = () => {
+    if (!user) {
+      addNotification('⚠️ يجب تسجيل الدخول أو إنشاء حساب طالب أولاً للاشتراك في الكورس.', 'warning');
+      openAuthModal('login');
+      return;
+    }
+
     if (walletBalance >= course.price) {
       enrollInCourse(course.id, 'المحفظة');
     } else {
@@ -48,6 +58,12 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({ course, onBa
   };
 
   const handleStartLesson = (lesson: Lesson, index: number) => {
+    if (!user) {
+      addNotification('⚠️ يجب تسجيل الدخول بحسابك أولاً لمشاهدة محاضرات الكورس.', 'warning');
+      openAuthModal('login');
+      return;
+    }
+
     if (!isEnrolled) {
       handleEnrollClick();
       return;
@@ -62,6 +78,15 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({ course, onBa
     }
 
     openVideoPlayer(lesson, course);
+  };
+
+  const handleOpenPdfNotes = () => {
+    if (!user) {
+      addNotification('⚠️ يجب تسجيل الدخول أو إنشاء حساب طالب بالمنصة للاطلاع على المذكرات والملازم.', 'warning');
+      openAuthModal('login');
+      return;
+    }
+    openPdf(attachedPdf);
   };
 
   const attachedPdf = PDF_DOCUMENTS.find(p => p.grade === course.grade) || PDF_DOCUMENTS[0];
@@ -178,7 +203,9 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({ course, onBa
                     <span>اشترك في الكورس الآن ({course.price} ج.م)</span>
                   </button>
                   <p className="text-[10px] text-emerald-200">
-                    رصيدك الحالي: {walletBalance} ج.م (يتم الخصم أو الشحن الفوري)
+                    {user 
+                      ? `رصيدك الحالي: ${walletBalance} ج.م (يتم الخصم أو الشحن الفوري)` 
+                      : 'يلزم تسجيل الدخول أو إنشاء حساب للاشتراك'}
                   </p>
                 </div>
               )}
@@ -188,6 +215,43 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({ course, onBa
           </div>
 
         </div>
+
+        {/* Guest Mandatory Registration Alert */}
+        {!user && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 dark:bg-amber-950/30 border-2 border-amber-500/40 text-amber-950 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-fadeIn">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-amber-500/20 rounded-xl text-[#f39c12] shrink-0">
+                <Lock className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-gray-900 dark:text-white">
+                  يجب تسجيل الدخول بحساب طالب للاشتراك في الكورس أو فتح المذكرات والمحاضرات
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                  سجل دخولك أو أنشئ حساباً جديداً برقم هاتفك وهاتف ولي الأمر للمتابعة وتفعيل الحصص.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 w-full sm:w-auto">
+              <button
+                onClick={() => openAuthModal('login')}
+                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#2d6a4f] hover:bg-[#1b4332] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+              >
+                <LogIn className="w-4 h-4 text-[#f39c12]" />
+                <span>تسجيل الدخول</span>
+              </button>
+
+              <button
+                onClick={() => openAuthModal('register')}
+                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#f39c12] hover:bg-[#e67e22] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>حساب جديد</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Curriculum Outline & Lessons List */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -348,10 +412,11 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({ course, onBa
                 </p>
 
                 <button
-                  onClick={() => openPdf(attachedPdf)}
-                  className="w-full py-2 rounded-xl bg-[#2d6a4f] hover:bg-[#1b4332] text-white text-xs font-bold transition-colors"
+                  onClick={handleOpenPdfNotes}
+                  className="w-full py-2.5 rounded-xl bg-[#2d6a4f] hover:bg-[#1b4332] text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
                 >
-                  معاينة وتصفح المذكرة
+                  <FileText className="w-3.5 h-3.5 text-[#f39c12]" />
+                  <span>معاينة وتصفح المذكرة {!user && '(تسجيل الدخول مطلوب)'}</span>
                 </button>
               </div>
             </div>

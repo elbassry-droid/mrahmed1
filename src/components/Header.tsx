@@ -13,7 +13,10 @@ import {
   Sparkles,
   ShieldCheck,
   X,
-  CheckCheck
+  CheckCheck,
+  Home,
+  Award,
+  FileText
 } from 'lucide-react';
 import { TEACHER_IMAGE } from '../data/mockData';
 
@@ -109,17 +112,6 @@ export const Header: React.FC = () => {
               id="nav-exams"
             >
               الامتحانات
-            </button>
-            <button
-              onClick={() => setActiveView('pdfs')}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${
-                activeView === 'pdfs' 
-                  ? 'text-[#2d6a4f] dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40' 
-                  : 'hover:text-[#2d6a4f] dark:hover:text-emerald-400'
-              }`}
-              id="nav-pdfs"
-            >
-              المذكرات
             </button>
 
             {isAdmin && (
@@ -387,6 +379,85 @@ export const Header: React.FC = () => {
 
         </div>
       </div>
+
+      {/* Mobile Fixed Bottom Navigation Bar (md:hidden) */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-[#13201a]/95 backdrop-blur-md border-t border-[#2d6a4f]/20 dark:border-emerald-900/40 shadow-2xl px-2 py-2 flex items-center justify-around">
+        <button
+          onClick={() => setActiveView('landing')}
+          className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-all ${
+            activeView === 'landing'
+              ? 'text-[#2d6a4f] dark:text-emerald-400 font-black scale-105'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-800'
+          }`}
+          id="mobile-nav-home"
+        >
+          <Home className="w-5 h-5" />
+          <span className="text-[10px] font-bold">الرئيسية</span>
+        </button>
+
+        <button
+          onClick={() => setActiveView('courses')}
+          className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-all ${
+            activeView === 'courses' || activeView === 'course_detail'
+              ? 'text-[#2d6a4f] dark:text-emerald-400 font-black scale-105'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-800'
+          }`}
+          id="mobile-nav-courses"
+        >
+          <BookOpen className="w-5 h-5" />
+          <span className="text-[10px] font-bold">الكورسات</span>
+        </button>
+
+        <button
+          onClick={() => setActiveView('exams')}
+          className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-all ${
+            activeView === 'exams'
+              ? 'text-[#2d6a4f] dark:text-emerald-400 font-black scale-105'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-800'
+          }`}
+          id="mobile-nav-exams"
+        >
+          <Award className="w-5 h-5" />
+          <span className="text-[10px] font-bold">الامتحانات</span>
+        </button>
+
+        {isAdmin ? (
+          <button
+            onClick={() => setActiveView('admin')}
+            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-all ${
+              activeView === 'admin'
+                ? 'text-[#f39c12] font-black scale-105'
+                : 'text-gray-500 dark:text-gray-400 hover:text-amber-500'
+            }`}
+            id="mobile-nav-admin"
+          >
+            <ShieldCheck className="w-5 h-5 text-[#f39c12]" />
+            <span className="text-[10px] font-bold">الأدمن</span>
+          </button>
+        ) : isLoggedIn ? (
+          <button
+            onClick={() => setActiveView('dashboard')}
+            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-all ${
+              activeView === 'dashboard' || activeView === 'account'
+                ? 'text-[#2d6a4f] dark:text-emerald-400 font-black scale-105'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-800'
+            }`}
+            id="mobile-nav-dashboard"
+          >
+            <LayoutDashboard className="w-5 h-5" />
+            <span className="text-[10px] font-bold">لوحتي</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => openAuthModal('login')}
+            className="flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl text-[#f39c12] font-bold"
+            id="mobile-nav-login"
+          >
+            <UserIcon className="w-5 h-5" />
+            <span className="text-[10px]">دخول</span>
+          </button>
+        )}
+      </nav>
     </header>
   );
 };

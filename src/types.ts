@@ -6,6 +6,46 @@ export type GradeLevel =
 
 export type Gender = 'male' | 'female';
 
+export const EGYPT_GOVERNORATES = [
+  'القاهرة',
+  'الجيزة',
+  'الإسكندرية',
+  'الدقهلية',
+  'البحر الأحمر',
+  'البحيرة',
+  'الفيوم',
+  'الغربية',
+  'الإسماعيلية',
+  'المنوفية',
+  'المنيا',
+  'القليوبية',
+  'الوادي الجديد',
+  'السويس',
+  'أسوان',
+  'أسيوط',
+  'بني سويف',
+  'بورسعيد',
+  'دمياط',
+  'الشرقية',
+  'جنوب سيناء',
+  'كفر الشيخ',
+  'مطروح',
+  'الأقصر',
+  'قنا',
+  'شمال سيناء',
+  'سوهاج'
+] as const;
+
+export type EgyptGovernorate = (typeof EGYPT_GOVERNORATES)[number];
+
+export interface DeviceConflictInfo {
+  phone: string;
+  studentName?: string;
+  currentDeviceName: string;
+  registeredDeviceName: string;
+  deviceLinkedAt?: string;
+}
+
 export interface User {
   id: string;
   firstName: string;
@@ -23,6 +63,18 @@ export interface User {
   centerId?: string;
   joinedDate: string;
   avatarUrl: string;
+  password?: string;
+  // Single Device Protection Fields
+  registeredDeviceId?: string;
+  registeredDeviceName?: string;
+  lastActiveSessionId?: string;
+  deviceLinkedAt?: string;
+  isDeviceLocked?: boolean;
+  lastLoginIp?: string;
+  // Admin Manual Block for Lagging or disciplinary reasons
+  isBlocked?: boolean;
+  blockedReason?: string;
+  blockedAt?: string;
 }
 
 export interface Lesson {
@@ -175,4 +227,19 @@ export interface StudentProgressRecord {
   commitmentStatus: 'ممتاز' | 'جيد جداً' | 'يحتاج متابعة' | 'مقصر بالواجبات';
   lastActivityDate: string;
   unlockedExceptionLessonIds: string[];
+  // Single Device Protection fields
+  registeredDeviceId?: string;
+  registeredDeviceName?: string;
+  deviceLinkedAt?: string;
+  isDeviceLocked?: boolean;
+  // Advanced Lecture Tracking & Accumulation
+  watchedMinutes: number;
+  totalCourseMinutes: number;
+  accumulatedLessonsCount: number; // عدد الحصص المتراكمة
+  missedQuizzesCount: number; // عدد الامتحانات غير المحلولة
+  laggingStatus: 'up_to_date' | 'lagging' | 'severely_lagging' | 'distinguished'; // منتظم | مراكم | منقطع ومتأخر | متفوق
+  // Admin Manual Block for Lagging or Disciplinary
+  isBlocked?: boolean;
+  blockedReason?: string;
+  blockedAt?: string;
 }

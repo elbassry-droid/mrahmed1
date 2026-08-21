@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Course, GradeLevel, HomeworkSubmission, Invoice, Lesson, PdfDocument, Quiz, QuizResult, RechargeCode, StudentProgressRecord, User } from '../types';
-import { COURSES, INITIAL_USER, ADMIN_USER, ADMIN_CREDENTIALS, PDF_DOCUMENTS, QUIZZES, SAMPLE_INVOICES, MOCK_STUDENT_RECORDS, MOCK_HOMEWORK_SUBMISSIONS } from '../data/mockData';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { Course, GradeLevel, HomeworkSubmission, Invoice, Lesson, PdfDocument, Quiz, QuizResult, RechargeCode, StudentProgressRecord, User, DeviceConflictInfo } from '../types';
+import { COURSES, ADMIN_USER, ADMIN_CREDENTIALS, PDF_DOCUMENTS, QUIZZES, SAMPLE_INVOICES, MOCK_STUDENT_RECORDS, MOCK_HOMEWORK_SUBMISSIONS } from '../data/mockData';
+import { getOrCreateDeviceId, getCurrentDeviceInfo, broadcastDeviceSession, subscribeToDeviceSync, DeviceInfo } from '../utils/deviceSecurity';
 
 export interface AppNotification {
   id: string;
@@ -101,9 +102,20 @@ interface AppContextType {
   grantLessonException: (recordId: string, lessonId: string) => void;
   toggleStudentCommitment: (recordId: string, status: StudentProgressRecord['commitmentStatus']) => void;
   deleteStudentRecord: (recordId: string) => void;
+  toggleStudentBlock: (studentIdOrRecordId: string, reason?: string) => void;
+
+  // Single Device Protection & Security Management
+  currentDeviceId: string;
+  currentDeviceInfo: DeviceInfo;
+  deviceConflictInfo: DeviceConflictInfo | null;
+  clearDeviceConflict: () => void;
+  forceTransferDevice: (phone: string, pass: string) => boolean;
+  deviceKickedAlert: { isOpen: boolean; newDeviceName: string; timestamp: string } | null;
+  closeDeviceKickedAlert: () => void;
+  adminResetStudentDevice: (studentId: string) => void;
 
   // Authentication actions
-  login: (phone: string, pass: string) => boolean;
+  login: (phone: string, pass: string, forceTransfer?: boolean) => boolean;
   register: (userData: Partial<User>) => void;
   logout: () => void;
   updateUser: (data: Partial<User>) => void;
@@ -124,10 +136,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         return JSON.parse(saved);
       } catch (e) {
-        return INITIAL_USER;
+        return null;
       }
     }
-    return INITIAL_USER;
+    return null;
   });
 
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -137,11 +149,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Courses & Enrollment
   const [courses, setCourses] = useState<Course[]>(COURSES);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [enrolledCourseIds, setEnrolledCourseIds] = useState<string[]>(['course-1']);
+  const [enrolledCourseIds, setEnrolledCourseIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('qaed_enrolled_courses');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [];
+  });
   
   // Invoices & Wallet
   const [walletBalance, setWalletBalance] = useState<number>(0);
-  const [invoices, setInvoices] = useState<Invoice[]>(SAMPLE_INVOICES);
+  const [invoices, setInvoices] = useState<Invoice[]>(() => {
+    const saved = localStorage.getItem('qaed_invoices');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [];
+  });
 
   // Recharge Codes / Center Cards (strictly admin-created)
   const [rechargeCodes, setRechargeCodes] = useState<RechargeCode[]>(() => {
@@ -205,6 +233,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activePdf, setActivePdf] = useState<PdfDocument | null>(null);
   const [rechargeModalOpen, setRechargeModalOpen] = useState(false);
 
+  // Single Device & Device Security State
+  const currentDeviceId = useMemo(() => getOrCreateDeviceId(), []);
+  const currentDeviceInfo = useMemo(() => getCurrentDeviceInfo(), []);
+  const [deviceConflictInfo, setDeviceConflictInfo] = useState<DeviceConflictInfo | null>(null);
+  const [deviceKickedAlert, setDeviceKickedAlert] = useState<{ isOpen: boolean; newDeviceName: string; timestamp: string } | null>(null);
+
+  // Stored Registered Students with their Device Bindings
+  const [registeredStudents, setRegisteredStudents] = useState<User[]>(() => {
+    const saved = localStorage.getItem('qaed_registered_students');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('qaed_registered_students', JSON.stringify(registeredStudents));
+    } catch (e) {}
+  }, [registeredStudents]);
+
+  // Real-time Single Device Listener: Kicks this session if the user logs in from another device
+  useEffect(() => {
+    if (!user || user.role === 'admin') return;
+
+    const unsubscribe = subscribeToDeviceSync(user.id, currentDeviceId, (payload) => {
+      // Force logout on this device
+      setUser(null);
+      setDeviceKickedAlert({
+        isOpen: true,
+        newDeviceName: payload.activeDeviceName || 'جهاز آخر',
+        timestamp: new Date(payload.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+      });
+      addNotification('⚠️ تم إنهاء جلستك: تم تشغيل هذا الحساب من جهاز آخر.', 'error');
+    });
+
+    return () => unsubscribe();
+  }, [user, currentDeviceId]);
+
   // Notifications State
   const [notifications, setNotifications] = useState<AppNotification[]>([
     {
@@ -215,7 +284,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
     {
       id: 'notif-2',
-      message: 'نظام متسلسلة الحصص مفعل: يرجى حل كويز وواجب كل حصة لفتح المحاضرة التالية مباشرة.',
+      message: '🔒 نظام حماية الحسابات مفعل: كل حساب مقفل ومرتبط بجهاز واحد فقط لمنع مشاركة الحسابات.',
       type: 'info',
       timestamp: 'منذ قليل'
     }
@@ -276,6 +345,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Check if a specific lesson is locked in the sequential progression
   const isLessonLocked = (course: Course, lessonIndex: number): LessonLockStatus => {
+    // Check if user is manually blocked by admin for lagging/accumulation
+    const currentStudentRecord = studentRecords.find(r => r.studentPhone === user?.phone || r.studentId === user?.id);
+    if (user?.isBlocked || currentStudentRecord?.isBlocked) {
+      const reasonText = user?.blockedReason || currentStudentRecord?.blockedReason || 'تراكم المحاضرات وعدم متابعة الحصص أولاً بأول';
+      return {
+        isLocked: true,
+        reason: `🚫 حسابك محظور من قبل الإدارة بسبب: (${reasonText}). يرجى التواصل مع مستر أحمد عبدالحميد لفك الحظر.`,
+        requiredQuizSolved: false,
+        prevLessonCompleted: false
+      };
+    }
+
     // First lesson in course is always accessible if enrolled
     if (lessonIndex <= 0) {
       return {
@@ -293,7 +374,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const currentLesson = course.lessons[lessonIndex];
 
     // Check if admin has granted an exception for current student on this lesson
-    const currentStudentRecord = studentRecords.find(r => r.studentPhone === user?.phone || r.studentId === user?.id);
     if (currentStudentRecord?.unlockedExceptionLessonIds?.includes(currentLesson.id)) {
       return {
         isLocked: false,
@@ -340,6 +420,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const openVideoPlayer = (lesson: Lesson, course: Course) => {
+    if (!user) {
+      addNotification('⚠️ يجب تسجيل الدخول بحسابك أولاً لمشاهدة المحاضرة.', 'warning');
+      setAuthModalMode('login');
+      setAuthModalOpen(true);
+      return;
+    }
+
     // Sequential Gate Check
     const lessonIndex = course.lessons.findIndex(l => l.id === lesson.id);
     const lockStatus = isLessonLocked(course, lessonIndex);
@@ -379,9 +466,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setStudentRecords(prev =>
         prev.map(rec => {
           if (rec.studentPhone === user.phone || rec.studentId === user.id) {
+            const newCompletedCount = Math.min(rec.totalLessonsCount, rec.completedLessonsCount + 1);
+            const newWatchedMinutes = Math.min(rec.totalCourseMinutes || 360, (rec.watchedMinutes || 0) + 45);
+            const newAccumulated = Math.max(0, rec.totalLessonsCount - newCompletedCount);
+            const newLaggingStatus: StudentProgressRecord['laggingStatus'] = 
+              newAccumulated === 0 
+                ? (rec.averageScore >= 90 ? 'distinguished' : 'up_to_date') 
+                : (newAccumulated >= 3 ? 'severely_lagging' : 'lagging');
             return {
               ...rec,
-              completedLessonsCount: Math.min(rec.totalLessonsCount, rec.completedLessonsCount + 1),
+              completedLessonsCount: newCompletedCount,
+              watchedMinutes: newWatchedMinutes,
+              accumulatedLessonsCount: newAccumulated,
+              laggingStatus: newLaggingStatus,
               lastActivityDate: 'الآن'
             };
           }
@@ -393,7 +490,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addNotification('أحسنت! تم إكمال المحاضرة بنجاح وتم تسجيل حضورك وتقدمك.', 'success');
   };
 
-  const openQuiz = (quiz: Quiz) => setActiveQuiz(quiz);
+  const openQuiz = (quiz: Quiz) => {
+    if (!user) {
+      addNotification('⚠️ يجب تسجيل الدخول أو إنشاء حساب طالب أولاً لبدء حل الاختبارات والواجبات.', 'warning');
+      setAuthModalMode('login');
+      setAuthModalOpen(true);
+      return;
+    }
+    setActiveQuiz(quiz);
+  };
   const closeQuiz = () => setActiveQuiz(null);
 
   const saveQuizResult = (resultData: Omit<QuizResult, 'id' | 'date'>) => {
@@ -433,12 +538,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map(rec => {
         if (rec.studentPhone === user?.phone || rec.studentId === user?.id) {
           const newCompletedQuizzes = rec.completedQuizzesCount + 1;
-          const newAvg = Math.round((rec.averageScore + resultData.percentage) / 2);
+          const newMissedQuizzes = Math.max(0, rec.totalQuizzesCount - newCompletedQuizzes);
+          const newAvg = rec.averageScore === 0 ? resultData.percentage : Math.round((rec.averageScore + resultData.percentage) / 2);
+          const newAccumulated = Math.max(0, rec.totalLessonsCount - rec.completedLessonsCount);
+          const newLaggingStatus: StudentProgressRecord['laggingStatus'] = 
+            newAccumulated === 0 && newMissedQuizzes === 0
+              ? (newAvg >= 90 ? 'distinguished' : 'up_to_date')
+              : (newAccumulated >= 3 || newMissedQuizzes >= 3 ? 'severely_lagging' : 'lagging');
           return {
             ...rec,
             completedQuizzesCount: newCompletedQuizzes,
+            missedQuizzesCount: newMissedQuizzes,
             averageScore: newAvg,
-            commitmentStatus: newAvg >= 85 ? 'ممتاز' : newAvg >= 70 ? 'جيد جداً' : 'يحتاج متابعة',
+            laggingStatus: newLaggingStatus,
+            commitmentStatus: newAvg >= 85 ? 'ممتاز' : newAvg >= 70 ? 'جيد جداً' : newMissedQuizzes >= 2 ? 'مقصر بالواجبات' : 'يحتاج متابعة',
             lastActivityDate: 'الآن'
           };
         }
@@ -477,10 +590,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addNotification('تم حذف سجل الطالب من المتابعة.', 'info');
   };
 
-  const openPdf = (pdf: PdfDocument) => setActivePdf(pdf);
+  const toggleStudentBlock = (studentIdOrRecordId: string, reason?: string) => {
+    let studentName = '';
+    let willBeBlocked = false;
+    let targetPhone = '';
+
+    setStudentRecords(prev =>
+      prev.map(rec => {
+        if (rec.id === studentIdOrRecordId || rec.studentId === studentIdOrRecordId) {
+          studentName = rec.studentName;
+          targetPhone = rec.studentPhone;
+          willBeBlocked = !rec.isBlocked;
+          return {
+            ...rec,
+            isBlocked: willBeBlocked,
+            blockedReason: willBeBlocked ? (reason || 'تراكم المحاضرات وعدم الالتزام بجدول المتابعة والواجبات') : undefined,
+            blockedAt: willBeBlocked ? new Date().toLocaleDateString('ar-EG', { dateStyle: 'full' }) : undefined
+          };
+        }
+        return rec;
+      })
+    );
+
+    setRegisteredStudents(prev =>
+      prev.map(u => {
+        if (u.id === studentIdOrRecordId || u.phone === targetPhone) {
+          return {
+            ...u,
+            isBlocked: willBeBlocked,
+            blockedReason: willBeBlocked ? (reason || 'تراكم المحاضرات وعدم الالتزام بجدول المتابعة والواجبات') : undefined,
+            blockedAt: willBeBlocked ? new Date().toLocaleDateString('ar-EG', { dateStyle: 'full' }) : undefined
+          };
+        }
+        return u;
+      })
+    );
+
+    // If currently logged-in user is the one being blocked/unblocked, update active user state
+    if (user && (user.id === studentIdOrRecordId || user.phone === targetPhone)) {
+      setUser(prev => prev ? {
+        ...prev,
+        isBlocked: willBeBlocked,
+        blockedReason: willBeBlocked ? (reason || 'تراكم المحاضرات وعدم الالتزام بجدول المتابعة والواجبات') : undefined,
+        blockedAt: willBeBlocked ? new Date().toLocaleDateString('ar-EG', { dateStyle: 'full' }) : undefined
+      } : null);
+    }
+
+    if (willBeBlocked) {
+      addNotification(`🚫 تم حظر الطالب (${studentName || 'المحدد'}) يدوياً بسبب التراكم. لن يتمكن من فتح الحصص أو دخول حسابه حتى فك الحظر.`, 'warning');
+    } else {
+      addNotification(`✅ تم فك الحظر عن الطالب (${studentName || 'المحدد'}) بنجاح وإعادة تفعيل حسابه.`, 'success');
+    }
+  };
+
+  const openPdf = (pdf: PdfDocument) => {
+    if (!user) {
+      addNotification('⚠️ يجب تسجيل الدخول أو إنشاء حساب طالب على المنصة أولاً لفتح واستعراض المذكرات والملازم.', 'warning');
+      setAuthModalMode('login');
+      setAuthModalOpen(true);
+      return;
+    }
+    setActivePdf(pdf);
+  };
   const closePdf = () => setActivePdf(null);
 
-  const openRechargeModal = () => setRechargeModalOpen(true);
+  const openRechargeModal = () => {
+    if (!user) {
+      addNotification('⚠️ يرجى تسجيل الدخول بحسابك أولاً لشحن المحفظة أو تفعيل كارت السنتر.', 'warning');
+      setAuthModalMode('login');
+      setAuthModalOpen(true);
+      return;
+    }
+    setRechargeModalOpen(true);
+  };
   const closeRechargeModal = () => setRechargeModalOpen(false);
 
   const rechargeWallet = (amount: number, method: string, code?: string) => {
@@ -618,6 +800,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const enrollInCourse = (courseId: string, paymentMethod: Invoice['paymentMethod']): boolean => {
+    if (!user) {
+      addNotification('⚠️ يجب تسجيل الدخول أو إنشاء حساب طالب أولاً للاشتراك في الكورس.', 'warning');
+      setAuthModalMode('login');
+      setAuthModalOpen(true);
+      return false;
+    }
+
     const targetCourse = courses.find(c => c.id === courseId);
     if (!targetCourse) return false;
 
@@ -651,7 +840,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  const login = (phone: string, pass: string): boolean => {
+  const login = (phone: string, pass: string, forceTransfer: boolean = false): boolean => {
     const cleanPhone = phone.trim();
     const cleanPass = pass.trim();
 
@@ -660,6 +849,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (cleanPass === ADMIN_CREDENTIALS.pass) {
         setUser(ADMIN_USER);
         setAuthModalOpen(false);
+        setDeviceConflictInfo(null);
         setActiveView('admin');
         addNotification('مرحباً بك يا مستر أحمد عبدالحميد! تم تسجيل الدخول بحساب المسؤول (الأدمن).', 'success');
         return true;
@@ -675,33 +865,263 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
 
-    setUser({
-      ...INITIAL_USER,
-      phone: cleanPhone || INITIAL_USER.phone,
-      role: 'student'
+    // 1. Locate student in registered students or student records
+    let targetStudent = registeredStudents.find(s => s.phone === cleanPhone);
+    if (!targetStudent) {
+      // Look in student progress records
+      const record = studentRecords.find(r => r.studentPhone === cleanPhone);
+      if (record) {
+        targetStudent = {
+          id: record.studentId,
+          firstName: record.studentName.split(' ')[0] || 'طالب',
+          secondName: '',
+          thirdName: '',
+          lastName: record.studentName.split(' ').slice(1).join(' ') || 'جديد',
+          phone: record.studentPhone,
+          parentPhone: record.parentPhone,
+          grade: record.grade,
+          isAzhar: false,
+          governorate: record.governorate,
+          gender: 'male',
+          walletBalance: 0,
+          role: 'student',
+          joinedDate: '2026',
+          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          registeredDeviceId: record.registeredDeviceId,
+          registeredDeviceName: record.registeredDeviceName,
+          deviceLinkedAt: record.deviceLinkedAt,
+          isDeviceLocked: record.isDeviceLocked ?? true,
+        };
+      } else {
+        addNotification('لم يتم العثور على حساب مسجل بهذا الرقم. يرجى إنشاء حساب جديد أولاً.', 'error');
+        return false;
+      }
+    }
+
+    // 2. CHECK IF STUDENT IS MANUALLY BLOCKED BY ADMIN (e.g. For Accumulation/Lagging)
+    const currentStudentRecord = studentRecords.find(r => r.studentPhone === cleanPhone || r.studentId === targetStudent.id);
+    if (targetStudent.isBlocked || currentStudentRecord?.isBlocked) {
+      const reasonText = targetStudent.blockedReason || currentStudentRecord?.blockedReason || 'تراكم المحاضرات وعدم متابعة الحصص في موعدها';
+      addNotification(`🚫 تم حظر حسابك من قبل إدارة المنصة بسبب: (${reasonText}). يرجى التواصل مع مستر أحمد عبدالحميد أو الدعم الفني.`, 'error');
+      return false;
+    }
+
+    // 3. SINGLE DEVICE SECURITY CHECK
+    const isBoundToOtherDevice = 
+      targetStudent.isDeviceLocked &&
+      targetStudent.registeredDeviceId && 
+      targetStudent.registeredDeviceId !== currentDeviceId;
+
+    if (isBoundToOtherDevice && !forceTransfer) {
+      // ⚠️ DEVICE MISMATCH DETECTED!
+      setDeviceConflictInfo({
+        phone: cleanPhone,
+        studentName: `${targetStudent.firstName} ${targetStudent.lastName}`,
+        currentDeviceName: currentDeviceInfo.label,
+        registeredDeviceName: targetStudent.registeredDeviceName || 'جهاز مسجل سابقاً',
+        deviceLinkedAt: targetStudent.deviceLinkedAt || 'تاريخ التسجيل'
+      });
+      addNotification('⚠️ تنبيه أمان: هذا الحساب مقترن بجهاز آخر. لا يمكن تشغيله على جهازين معاً.', 'warning');
+      return false;
+    }
+
+    // 3. Device Matches OR Student chose to force-transfer account to current device
+    const updatedUser: User = {
+      ...targetStudent,
+      phone: cleanPhone,
+      role: 'student',
+      registeredDeviceId: currentDeviceId,
+      registeredDeviceName: currentDeviceInfo.label,
+      deviceLinkedAt: targetStudent.deviceLinkedAt || new Date().toLocaleDateString('ar-EG', { dateStyle: 'full' }),
+      isDeviceLocked: true,
+      lastActiveSessionId: Date.now().toString()
+    };
+
+    // Save to registered list
+    setRegisteredStudents(prev => {
+      const filtered = prev.filter(u => u.phone !== cleanPhone);
+      return [updatedUser, ...filtered];
     });
+
+    // Update in student records table as well
+    setStudentRecords(prev =>
+      prev.map(r => {
+        if (r.studentPhone === cleanPhone) {
+          return {
+            ...r,
+            registeredDeviceId: currentDeviceId,
+            registeredDeviceName: currentDeviceInfo.label,
+            deviceLinkedAt: updatedUser.deviceLinkedAt,
+            isDeviceLocked: true
+          };
+        }
+        return r;
+      })
+    );
+
+    // Broadcast session change to immediately kick any old sessions/devices
+    broadcastDeviceSession({
+      userId: updatedUser.id,
+      phone: cleanPhone,
+      activeDeviceId: currentDeviceId,
+      activeDeviceName: currentDeviceInfo.label,
+      sessionId: updatedUser.lastActiveSessionId!,
+      timestamp: Date.now(),
+      action: forceTransfer ? 'transfer' : 'login'
+    });
+
+    setUser(updatedUser);
     setAuthModalOpen(false);
+    setDeviceConflictInfo(null);
     setActiveView('dashboard');
-    addNotification('تم تسجيل الدخول بنجاح! مرحباً بك.', 'success');
+    
+    if (forceTransfer) {
+      addNotification('تم نقل الحساب وقفل الأمان على جهازك الحالي بنجاح، وتم إنهاء الجلسة على الجهاز القديم.', 'success');
+    } else {
+      addNotification('تم تسجيل الدخول بنجاح! حسابك مؤمن ومقترن بجهازك الحالي.', 'success');
+    }
     return true;
+  };
+
+  const forceTransferDevice = (phone: string, pass: string): boolean => {
+    return login(phone, pass, true);
+  };
+
+  const clearDeviceConflict = () => {
+    setDeviceConflictInfo(null);
+  };
+
+  const closeDeviceKickedAlert = () => {
+    setDeviceKickedAlert(null);
   };
 
   const register = (userData: Partial<User>) => {
     const newUser: User = {
-      ...INITIAL_USER,
-      ...userData,
-      role: 'student',
       id: `std_${Date.now()}`,
-      joinedDate: new Date().toLocaleDateString('ar-EG', { dateStyle: 'full' })
+      firstName: userData.firstName || '',
+      secondName: userData.secondName || '',
+      thirdName: userData.thirdName || '',
+      lastName: userData.lastName || '',
+      phone: userData.phone || '',
+      parentPhone: userData.parentPhone || '',
+      grade: userData.grade || 'second_general',
+      isAzhar: userData.isAzhar || false,
+      governorate: userData.governorate || 'قنا',
+      gender: userData.gender || 'male',
+      walletBalance: 0,
+      role: 'student',
+      joinedDate: new Date().toLocaleDateString('ar-EG', { dateStyle: 'full' }),
+      avatarUrl: userData.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      password: userData.password,
+      registeredDeviceId: currentDeviceId,
+      registeredDeviceName: currentDeviceInfo.label,
+      deviceLinkedAt: new Date().toLocaleDateString('ar-EG', { dateStyle: 'full' }),
+      isDeviceLocked: true,
+      lastActiveSessionId: Date.now().toString()
     };
+
+    // Save in registered list
+    setRegisteredStudents(prev => [newUser, ...prev.filter(u => u.phone !== newUser.phone)]);
+
+    // Add to student progress records table for admin view
+    const newRecord: StudentProgressRecord = {
+      id: `rec-${Date.now()}`,
+      studentId: newUser.id,
+      studentName: `${newUser.firstName} ${newUser.secondName || ''} ${newUser.thirdName || ''} ${newUser.lastName}`.trim(),
+      studentPhone: newUser.phone,
+      parentPhone: newUser.parentPhone,
+      governorate: newUser.governorate,
+      grade: newUser.grade,
+      gradeLabel: newUser.grade.includes('second') ? 'الصف الثاني الثانوي' : 'الصف الأول الثانوي',
+      enrolledCourseId: 'course-1',
+      enrolledCourseTitle: 'كورس الشهر الأول - علم النفس والاجتماع',
+      completedLessonsCount: 0,
+      totalLessonsCount: 4,
+      completedQuizzesCount: 0,
+      totalQuizzesCount: 4,
+      averageScore: 0,
+      commitmentStatus: 'ممتاز',
+      lastActivityDate: 'الآن',
+      unlockedExceptionLessonIds: [],
+      registeredDeviceId: currentDeviceId,
+      registeredDeviceName: currentDeviceInfo.label,
+      deviceLinkedAt: newUser.deviceLinkedAt,
+      isDeviceLocked: true,
+      watchedMinutes: 0,
+      totalCourseMinutes: 360,
+      accumulatedLessonsCount: 4,
+      missedQuizzesCount: 4,
+      laggingStatus: 'lagging'
+    };
+    setStudentRecords(prev => [newRecord, ...prev]);
+
+    // Broadcast session
+    broadcastDeviceSession({
+      userId: newUser.id,
+      phone: newUser.phone,
+      activeDeviceId: currentDeviceId,
+      activeDeviceName: currentDeviceInfo.label,
+      sessionId: newUser.lastActiveSessionId!,
+      timestamp: Date.now(),
+      action: 'login'
+    });
+
     setUser(newUser);
     setAuthModalOpen(false);
+    setDeviceConflictInfo(null);
     setActiveView('dashboard');
-    addNotification('تم إنشاء الحساب بنجاح! أهلاً بك في منصة القائد.', 'success');
+    addNotification('تم إنشاء الحساب وقفل الأمان على جهازك بنجاح! أهلاً بك في منصة القائد.', 'success');
+  };
+
+  const adminResetStudentDevice = (studentId: string) => {
+    // Unlink device from student progress records
+    setStudentRecords(prev =>
+      prev.map(r => {
+        if (r.studentId === studentId || r.id === studentId) {
+          return {
+            ...r,
+            registeredDeviceId: undefined,
+            registeredDeviceName: 'غير مقترن (تمت إعادة التعيين)',
+            isDeviceLocked: false,
+            deviceLinkedAt: undefined
+          };
+        }
+        return r;
+      })
+    );
+
+    // Unlink in registered students
+    setRegisteredStudents(prev =>
+      prev.map(u => {
+        if (u.id === studentId) {
+          return {
+            ...u,
+            registeredDeviceId: undefined,
+            registeredDeviceName: undefined,
+            isDeviceLocked: false,
+            deviceLinkedAt: undefined
+          };
+        }
+        return u;
+      })
+    );
+
+    // If current logged-in user is this student
+    if (user && user.id === studentId) {
+      setUser({
+        ...user,
+        registeredDeviceId: undefined,
+        registeredDeviceName: undefined,
+        isDeviceLocked: false
+      });
+    }
+
+    addNotification('تم فك قفل الجهاز للطالب بنجاح! يستطيع الطالب الآن الدخول من جهازه الجديد وسيتم ربطه تلقائياً.', 'success');
   };
 
   const logout = () => {
     setUser(null);
+    setDeviceConflictInfo(null);
     setActiveView('landing');
     addNotification('تم تسجيل الخروج بنجاح.', 'info');
   };
@@ -821,6 +1241,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         grantLessonException,
         toggleStudentCommitment,
         deleteStudentRecord,
+        toggleStudentBlock,
+        currentDeviceId,
+        currentDeviceInfo,
+        deviceConflictInfo,
+        clearDeviceConflict,
+        forceTransferDevice,
+        deviceKickedAlert,
+        closeDeviceKickedAlert,
+        adminResetStudentDevice,
         login,
         register,
         logout,

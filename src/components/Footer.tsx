@@ -101,11 +101,6 @@ export const Footer: React.FC = () => {
                 </button>
               </li>
               <li>
-                <button onClick={() => setActiveView('pdfs')} className="hover:text-white transition-colors">
-                  • المذكرات وملازم الخرائط الذهنية
-                </button>
-              </li>
-              <li>
                 <button onClick={() => setActiveView('account')} className="hover:text-white transition-colors">
                   • شحن الرصيد بكارت السنتر وفودافون كاش
                 </button>
@@ -147,11 +142,16 @@ export const Footer: React.FC = () => {
 
         </div>
 
-        {/* Bottom copyright line */}
+        {/* Bottom copyright & credits line */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
-          <p>
-            جميع الحقوق محفوظة © {new Date().getFullYear()} - منصة القائد في المواد الفلسفية وعلم النفس (مستر أحمد عبدالحميد)
-          </p>
+          <div className="space-y-1 text-center sm:text-right">
+            <p>
+              جميع الحقوق محفوظة © {new Date().getFullYear()} - منصة القائد في المواد الفلسفية وعلم النفس (مستر أحمد عبدالحميد)
+            </p>
+            <p className="text-[11px] font-mono text-gray-400 font-medium">
+              Made by: <span className="text-[#f39c12] font-bold">Mahmoud Hamdy Bassry</span>
+            </p>
+          </div>
           <div className="flex items-center gap-4 text-gray-400">
             <span>نظام الحصص المحمية ضد تصوير الشاشة</span>
             <span>•</span>

@@ -116,6 +116,7 @@ export const CourseCatalogView: React.FC = () => {
                           src={TEACHER_IMAGE}
                           alt="مستر أحمد عبدالحميد"
                           className="w-full h-full object-contain drop-shadow-md"
+                          referrerPolicy="no-referrer"
                         />
                       </div>
 

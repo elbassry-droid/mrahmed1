@@ -1,21 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Lesson, Course } from '../../types';
 import { 
   X, 
-  ShieldAlert, 
   ShieldCheck, 
   FileText, 
   Award, 
   CheckCircle2, 
   Play, 
-  Lock, 
   AlertTriangle,
   Info,
   Maximize2,
-  Volume2,
+  Minimize2,
   LockKeyhole,
-  EyeOff
+  User,
+  Phone,
+  Shield,
+  Clock
 } from 'lucide-react';
 import { PDF_DOCUMENTS, QUIZZES } from '../../data/mockData';
 
@@ -32,6 +33,9 @@ export const ProtectedVideoPlayer: React.FC<ProtectedVideoPlayerProps> = ({ less
   const [securityAlert, setSecurityAlert] = useState<string | null>(null);
   const [currentTimeStamp, setCurrentTimeStamp] = useState<string>('');
   const [isCompleted, setIsCompleted] = useState<boolean>(!!lesson.isCompleted);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  const videoContainerRef = useRef<HTMLDivElement>(null);
 
   // Update dynamic watermark timestamp every second
   useEffect(() => {
@@ -44,9 +48,44 @@ export const ProtectedVideoPlayer: React.FC<ProtectedVideoPlayerProps> = ({ less
     return () => clearInterval(interval);
   }, []);
 
-  // Anti-Screenshot & Screen Capture Deterrent listener
+  // Listen to fullscreen changes across browsers
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      setIsFullscreen(isCurrentlyFullscreen);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
+  // Anti-Screenshot & Screen Capture Deterrent listener + 'F' for Fullscreen
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Toggle Fullscreen with 'F' / 'f'
+      if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const targetTag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (targetTag !== 'input' && targetTag !== 'textarea') {
+          e.preventDefault();
+          toggleFullscreen();
+          return;
+        }
+      }
+
       // PrintScreen key
       if (e.key === 'PrintScreen' || e.keyCode === 44) {
         setSecurityAlert('⚠️ محاولة تصوير الشاشة محظورة! تم تسجيل هويتك ورقم هاتفك على البث.');
@@ -66,7 +105,36 @@ export const ProtectedVideoPlayer: React.FC<ProtectedVideoPlayerProps> = ({ less
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [isFullscreen]);
+
+  // Request / Exit Fullscreen on our protected video container
+  const toggleFullscreen = () => {
+    if (!videoContainerRef.current) return;
+
+    if (!isFullscreen) {
+      const elem = videoContainerRef.current as any;
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      } else if (elem.mozRequestFullScreen) {
+        elem.mozRequestFullScreen();
+      } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+      }
+    } else {
+      const doc = document as any;
+      if (doc.exitFullscreen) {
+        doc.exitFullscreen();
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen();
+      } else if (doc.mozCancelFullScreen) {
+        doc.mozCancelFullScreen();
+      } else if (doc.msExitFullscreen) {
+        doc.msExitFullscreen();
+      }
+    }
+  };
 
   // Extract Google Drive File ID from either driveFileId or videoUrl/youtubeId
   const getDriveEmbedUrl = (lesson: Lesson): string => {
@@ -100,8 +168,8 @@ export const ProtectedVideoPlayer: React.FC<ProtectedVideoPlayerProps> = ({ less
   };
 
   const studentDisplayName = user ? `${user.firstName} ${user.lastName}` : 'طالب المنصة';
-  const studentPhone = user?.phone || '01027568272';
-  const studentCode = user?.id || 'STD-78219';
+  const studentPhone = user?.phone || '01xxxxxxxxx';
+  const studentCode = user?.id || 'STD-USER';
 
   return (
     <div 
@@ -156,9 +224,12 @@ export const ProtectedVideoPlayer: React.FC<ProtectedVideoPlayerProps> = ({ less
           {/* Main Video Stage (Col 8) */}
           <div className="lg:col-span-8 bg-black flex flex-col justify-center relative overflow-hidden group">
             
-            {/* Aspect Ratio 16:9 Video Box */}
+            {/* Video Container (The element that goes Fullscreen with all protective overlays) */}
             <div 
-              className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden"
+              ref={videoContainerRef}
+              className={`relative w-full bg-black flex items-center justify-center overflow-hidden ${
+                isFullscreen ? 'fixed inset-0 z-[9999] h-screen w-screen' : 'aspect-video'
+              }`}
               onContextMenu={(e) => {
                 e.preventDefault();
                 setSecurityAlert('⚠️ تحميل أو فحص كود الفيديو محظور أمنياً');
@@ -175,22 +246,44 @@ export const ProtectedVideoPlayer: React.FC<ProtectedVideoPlayerProps> = ({ less
               ></iframe>
 
               {/* SHIELD 1: TOP BRANDING & ANTI-POPOUT SHIELD */}
-              {/* Completely covers Google Drive's top-right popout icon & filename header to prevent opening in a new tab or extracting the link */}
               <div 
                 className="absolute top-0 inset-x-0 h-14 z-20 video-shield-top bg-gradient-to-b from-black/95 via-black/60 to-transparent flex items-center justify-between px-4"
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
               >
                 <div className="flex items-center gap-2 text-white/90 text-[11px] font-bold">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span>منصة القائد • مشغل المحاضرات المشفر (سيرفرات آمنة)</span>
+                  <span>منصة القائد • مشغل المحاضرات المشفر</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-white/80 text-[10px] bg-black/70 px-2.5 py-1 rounded-full border border-white/15">
-                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                  <span>محمي من النسخ والتحميل المباشر</span>
+                
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 text-white/80 text-[10px] bg-black/70 px-2.5 py-1 rounded-full border border-white/15">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    <span className="hidden sm:inline">محمي من النسخ والتحميل</span>
+                  </div>
+
+                  {/* Dedicated Fullscreen Toggle Button */}
+                  <button
+                    onClick={toggleFullscreen}
+                    className="p-1.5 rounded-lg bg-white/20 hover:bg-[#f39c12] text-white transition-all flex items-center gap-1 text-[11px] font-bold shadow-md cursor-pointer"
+                    title={isFullscreen ? 'الخروج من ملء الشاشة (ESC)' : 'ملء الشاشة مع حماية العلامة المائية (F)'}
+                    id="fullscreen-toggle-btn"
+                  >
+                    {isFullscreen ? (
+                      <>
+                        <Minimize2 className="w-4 h-4" />
+                        <span className="text-[10px]">تصغير</span>
+                      </>
+                    ) : (
+                      <>
+                        <Maximize2 className="w-4 h-4" />
+                        <span className="text-[10px] hidden sm:inline">ملء الشاشة</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 
-              {/* SHIELD 2: TOP RIGHT CORNER POPOUT INTERCEPTOR (Extra wide for Google Drive popout icon) */}
+              {/* SHIELD 2: TOP RIGHT CORNER POPOUT INTERCEPTOR */}
               <div 
                 className="absolute top-0 right-0 w-24 h-16 z-30 cursor-default bg-transparent"
                 onClick={(e) => { 
@@ -208,31 +301,78 @@ export const ProtectedVideoPlayer: React.FC<ProtectedVideoPlayerProps> = ({ less
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
               ></div>
 
-              {/* DYNAMIC ANTI-THEFT FLOATING WATERMARK (PRIMARY) */}
+              {/* PRIMARY DYNAMIC ANTI-THEFT FLOATING WATERMARK */}
               {/* Smoothly glides across the video stamped with student's actual name, phone, and time */}
-              <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
-                <div className="animate-floating-watermark inline-block bg-black/60 backdrop-blur-xs text-white/70 text-[10px] sm:text-[11px] font-mono font-bold px-3 py-1.5 rounded-xl border border-white/20 shadow-md">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-emerald-400">● {studentDisplayName}</span>
-                    <span>•</span>
-                    <span className="text-amber-300 font-bold">{studentPhone}</span>
-                    <span>•</span>
-                    <span className="text-gray-300">{currentTimeStamp}</span>
+              <div className="absolute inset-0 pointer-events-none overflow-hidden z-30">
+                <div className={`animate-floating-watermark inline-block bg-black/75 backdrop-blur-xs text-white font-mono font-bold rounded-2xl border border-emerald-400/40 shadow-2xl ${
+                  isFullscreen ? 'px-5 py-2.5 text-xs sm:text-sm ring-2 ring-emerald-500/50' : 'px-3 py-1.5 text-[10px] sm:text-[11px]'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-emerald-400 flex items-center gap-1 font-bold">
+                      <User className="w-3.5 h-3.5" />
+                      {studentDisplayName}
+                    </span>
+                    <span className="text-white/40">•</span>
+                    <span className="text-[#f39c12] font-black flex items-center gap-1">
+                      <Phone className="w-3.5 h-3.5" />
+                      {studentPhone}
+                    </span>
+                    <span className="text-white/40">•</span>
+                    <span className="text-gray-200 flex items-center gap-1 text-[10px]">
+                      <Clock className="w-3 h-3 text-emerald-400" />
+                      {currentTimeStamp}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* DYNAMIC SECONDARY FLOATING WATERMARK (COUNTER-DRIFT) */}
-              <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
-                <div className="animate-floating-watermark-2 inline-block bg-emerald-950/40 backdrop-blur-xs text-white/40 text-[9px] sm:text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg border border-emerald-500/20 shadow-xs">
-                  <span>منصة القائد • كود الطالب: {studentCode} • بث مشفر</span>
+              {/* SECONDARY DYNAMIC FLOATING WATERMARK (COUNTER-DRIFT) */}
+              <div className="absolute inset-0 pointer-events-none overflow-hidden z-30">
+                <div className={`animate-floating-watermark-2 inline-block bg-emerald-950/60 backdrop-blur-xs text-white/70 font-mono font-bold rounded-xl border border-emerald-500/30 shadow-md ${
+                  isFullscreen ? 'px-4 py-2 text-xs' : 'px-2.5 py-1 text-[9px] sm:text-[10px]'
+                }`}>
+                  <div className="flex items-center gap-1.5">
+                    <Shield className="w-3 h-3 text-emerald-400" />
+                    <span>منصة القائد • كود: {studentCode} • حماية البث</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Permanent Micro Static Watermark in top-left */}
-              <div className="absolute top-16 left-3 pointer-events-none opacity-25 text-[9px] text-white font-mono z-20 flex items-center gap-1">
-                <span>SEC-{studentCode}-DRM</span>
+              {/* PERMANENT FOUR CORNERS & CENTER WATERMARKS (SPECIALLY VISIBLE IN FULLSCREEN) */}
+              {/* Corner 1: Top Right */}
+              <div className="absolute top-16 right-4 pointer-events-none z-30 bg-black/50 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-white/10 text-[10px] text-white/80 font-mono flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>{studentDisplayName}</span>
+                <span className="text-amber-400 font-bold">({studentPhone})</span>
               </div>
+
+              {/* Corner 2: Bottom Left */}
+              <div className="absolute bottom-4 left-4 pointer-events-none z-30 bg-black/50 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-white/10 text-[9px] sm:text-[10px] text-emerald-300 font-mono flex items-center gap-1">
+                <LockKeyhole className="w-3 h-3 text-emerald-400" />
+                <span>بث مشفر • {currentTimeStamp}</span>
+              </div>
+
+              {/* Corner 3: Bottom Right in Fullscreen */}
+              {isFullscreen && (
+                <div className="absolute bottom-4 right-4 pointer-events-none z-30 bg-black/60 backdrop-blur-xs px-3 py-1.5 rounded-xl border border-emerald-500/30 text-xs text-white font-mono flex items-center gap-2">
+                  <span className="text-[#f39c12] font-black">{studentPhone}</span>
+                  <span className="text-gray-400">|</span>
+                  <span className="text-emerald-400 font-bold">{studentDisplayName}</span>
+                </div>
+              )}
+
+              {/* Exit Fullscreen Floating Button (Visible in Fullscreen Mode on hover/always) */}
+              {isFullscreen && (
+                <div className="absolute top-4 left-4 z-40">
+                  <button
+                    onClick={toggleFullscreen}
+                    className="px-3.5 py-2 rounded-xl bg-black/80 hover:bg-[#f39c12] text-white font-bold text-xs flex items-center gap-2 border border-white/20 shadow-2xl transition-all"
+                  >
+                    <Minimize2 className="w-4 h-4" />
+                    <span>خروج من ملء الشاشة (ESC)</span>
+                  </button>
+                </div>
+              )}
 
             </div>
 
@@ -266,13 +406,13 @@ export const ProtectedVideoPlayer: React.FC<ProtectedVideoPlayerProps> = ({ less
                   </button>
                 )}
 
-                {/* Open Attached PDF */}
+                {/* Fullscreen Button in bottom toolbar */}
                 <button
-                  onClick={handleOpenLecturePdf}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-emerald-200 flex items-center gap-1.5 transition-colors"
+                  onClick={toggleFullscreen}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-900/40 hover:bg-emerald-800/60 text-white flex items-center gap-1.5 border border-emerald-700/50 transition-colors"
                 >
-                  <FileText className="w-4 h-4 text-emerald-400" />
-                  <span>مذكرة الشرح (PDF)</span>
+                  <Maximize2 className="w-4 h-4 text-[#f39c12]" />
+                  <span>ملء الشاشة مع الحماية</span>
                 </button>
               </div>
 
@@ -366,4 +506,5 @@ export const ProtectedVideoPlayer: React.FC<ProtectedVideoPlayerProps> = ({ less
     </div>
   );
 };
+
 

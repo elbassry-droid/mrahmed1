@@ -30,7 +30,16 @@ import {
   Clock,
   Video,
   Play,
-  FileCheck
+  FileCheck,
+  Smartphone,
+  RefreshCw,
+  ShieldAlert,
+  Eye,
+  Hourglass,
+  Flame,
+  UserX,
+  TrendingUp,
+  UserCheck
 } from 'lucide-react';
 
 export const AdminDashboardView: React.FC = () => {
@@ -49,6 +58,8 @@ export const AdminDashboardView: React.FC = () => {
     grantLessonException,
     toggleStudentCommitment,
     deleteStudentRecord,
+    toggleStudentBlock,
+    adminResetStudentDevice,
     quizzes,
     rechargeCodes
   } = useApp();
@@ -61,10 +72,15 @@ export const AdminDashboardView: React.FC = () => {
   const [searchStudentQuery, setSearchStudentQuery] = useState('');
   const [selectedGradeFilter, setSelectedGradeFilter] = useState<string>('all');
   const [selectedCommitmentFilter, setSelectedCommitmentFilter] = useState<string>('all');
+  const [selectedLaggingFilter, setSelectedLaggingFilter] = useState<'all' | 'lagging_only' | 'up_to_date_only' | 'severely_lagging' | 'blocked_only'>('all');
 
   // Student exception unlock modal state
   const [selectedStudentForUnlock, setSelectedStudentForUnlock] = useState<StudentProgressRecord | null>(null);
   const [lessonToUnlockId, setLessonToUnlockId] = useState<string>('les-2');
+
+  // Student manual block modal state
+  const [studentToBlockModal, setStudentToBlockModal] = useState<StudentProgressRecord | null>(null);
+  const [blockReasonInput, setBlockReasonInput] = useState('تراكم المحاضرات والتأخر عن جدول المتابعة والواجبات');
 
   // New Course Modal / Form State
   const [showAddCourseModal, setShowAddCourseModal] = useState(false);
@@ -197,6 +213,27 @@ export const AdminDashboardView: React.FC = () => {
     }
   };
 
+  const handleOpenBlockModal = (std: StudentProgressRecord) => {
+    const accumulated = std.accumulatedLessonsCount ?? Math.max(0, std.totalLessonsCount - std.completedLessonsCount);
+    setStudentToBlockModal(std);
+    setBlockReasonInput(
+      accumulated > 0 
+        ? `تراكم ${accumulated} محاضرات وعدم إكمال الواجبات والامتحانات في موعدها`
+        : 'عدم الالتزام بجدول المتابعة والواجبات الدورية'
+    );
+  };
+
+  const handleConfirmBlock = () => {
+    if (studentToBlockModal) {
+      toggleStudentBlock(studentToBlockModal.id, blockReasonInput);
+      setStudentToBlockModal(null);
+    }
+  };
+
+  const handleUnblockStudent = (std: StudentProgressRecord) => {
+    toggleStudentBlock(std.id);
+  };
+
   // Filter students
   const filteredStudents = studentRecords.filter(std => {
     const matchesSearch = 
@@ -207,15 +244,30 @@ export const AdminDashboardView: React.FC = () => {
 
     const matchesGrade = selectedGradeFilter === 'all' || std.grade === selectedGradeFilter;
     const matchesCommitment = selectedCommitmentFilter === 'all' || std.commitmentStatus === selectedCommitmentFilter;
+    const matchesLagging = 
+      selectedLaggingFilter === 'all' ||
+      (selectedLaggingFilter === 'lagging_only' && ((std.accumulatedLessonsCount || 0) > 0 || std.laggingStatus === 'lagging' || std.laggingStatus === 'severely_lagging')) ||
+      (selectedLaggingFilter === 'severely_lagging' && std.laggingStatus === 'severely_lagging') ||
+      (selectedLaggingFilter === 'up_to_date_only' && ((std.accumulatedLessonsCount || 0) === 0 || std.laggingStatus === 'up_to_date' || std.laggingStatus === 'distinguished')) ||
+      (selectedLaggingFilter === 'blocked_only' && !!std.isBlocked);
 
-    return matchesSearch && matchesGrade && matchesCommitment;
+    return matchesSearch && matchesGrade && matchesCommitment && matchesLagging;
   });
 
   const generateWhatsAppParentUrl = (std: StudentProgressRecord) => {
     const cleanPhone = std.parentPhone.replace(/\D/g, '');
     const fullPhone = cleanPhone.startsWith('0') ? `2${cleanPhone}` : cleanPhone;
+    const accumulated = std.accumulatedLessonsCount ?? Math.max(0, std.totalLessonsCount - std.completedLessonsCount);
+    const watched = std.watchedMinutes ?? (std.completedLessonsCount * 45);
+    const totalMin = std.totalCourseMinutes ?? 360;
+    const missedQuizzes = std.missedQuizzesCount ?? Math.max(0, std.totalQuizzesCount - std.completedQuizzesCount);
+
+    const laggingText = accumulated > 0 
+      ? `⚠️ الحصص المتراكمة على الطالب: ${accumulated} حصة متأخرة لم يتم إكمالها` 
+      : `✅ الحصص المتراكمة: لا توجد حصص متراكمة (الطالب مواكب للجدول)`;
+
     const message = encodeURIComponent(
-      `السلام عليكم ورحمة الله وبركاته،\nمعكم مستر أحمد عبدالحميد (القائد في المواد الفلسفية وعلم النفس).\n\nتقرير متابعة الطالب: ${std.studentName}\nالصف: ${std.gradeLabel}\nالكورس المشترك به: ${std.enrolledCourseTitle}\nنسبة حضور الحصص: ${std.completedLessonsCount} من ${std.totalLessonsCount} حصص\nمتوسط درجات امتحانات الحصص والواجب: ${std.averageScore}%\nحالة الالتزام: ${std.commitmentStatus}\nآخر نشاط بالمنصة: ${std.lastActivityDate}\n\nنرجو الاستمرار في المتابعة والتشجيع لتحقيق الدرجات النهائية بإذن الله.`
+      `السلام عليكم ورحمة الله وبركاته،\nمعكم مستر أحمد عبدالحميد (القائد في المواد الفلسفية وعلم النفس).\n\n📊 تقرير متابعة الطالب: ${std.studentName}\n📌 الصف: ${std.gradeLabel}\n📚 الكورس المشترك به: ${std.enrolledCourseTitle}\n\n⏱️ تفاصيل المشاهدة والتفاعل:\n- دقائق المشاهدة: ${watched} دقيقة (من إجمالي ${totalMin} دقيقة)\n- عدد الحصص المكتملة: ${std.completedLessonsCount} من أصل ${std.totalLessonsCount} حصص\n- ${laggingText}\n\n📝 تفاصيل الواجبات والامتحانات:\n- عدد الامتحانات المحلولة: ${std.completedQuizzesCount} من أصل ${std.totalQuizzesCount} امتحانات\n- الامتحانات المتبقية: ${missedQuizzes} كويز\n- متوسط درجات الامتحانات: ${std.averageScore}%\n\n🎯 حالة الالتزام: ${std.commitmentStatus}\n🕒 آخر تفاعل بالمنصة: ${std.lastActivityDate}\n\nنرجو حث الطالب على متابعة الحصص المتراكمة وحل الامتحانات لضمان التفوق وتحقيق أعلى الدرجات بإذن الله.`
     );
     return `https://wa.me/${fullPhone}?text=${message}`;
   };
@@ -246,7 +298,7 @@ export const AdminDashboardView: React.FC = () => {
                 أهلاً بك يا مستر أحمد عبدالحميد
               </h1>
               <p className="text-xs sm:text-sm text-emerald-200 mt-1">
-                رقم المسؤول: <span className="font-mono font-bold text-white ltr">01027568272</span> • إدارة المواد الفلسفية وعلم النفس
+                إدارة المواد الفلسفية وعلم النفس • نظام متابعة الطلاب والمحاضرات المتراكمة
               </p>
             </div>
           </div>
@@ -268,6 +320,39 @@ export const AdminDashboardView: React.FC = () => {
               <span>عرض المنصة كطالب</span>
               <ArrowLeft className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+
+        {/* Global Security & Anti-Data Extraction Protection Banner */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-[#14261e] via-[#1b3d2e] to-[#14261e] text-white border border-emerald-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-emerald-500/20 rounded-xl text-emerald-400 border border-emerald-400/30">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-emerald-300">
+                  درع حماية وأمان البيانات المشدد (DRM & Anti-Extraction Shield)
+                </h3>
+                <span className="px-2 py-0.5 rounded-md bg-emerald-500/30 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-400/30">
+                  نشط 100%
+                </span>
+              </div>
+              <p className="text-xs text-gray-300 mt-0.5 leading-relaxed">
+                حظر تام لأدوات المطورين (F12, Inspect)، منع كشط الأكواد وتفريغ البيانات، حظر حفظ وطباعة الصفحات، حماية الفيديوهات والمذكرات بعلامات مائية ديناميكية.
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 shrink-0 text-xs font-bold">
+            <span className="inline-flex items-center gap-1 bg-black/40 px-2.5 py-1.5 rounded-lg border border-white/10 text-gray-300">
+              <Lock className="w-3.5 h-3.5 text-emerald-400" />
+              تشفير التخزين
+            </span>
+            <span className="inline-flex items-center gap-1 bg-black/40 px-2.5 py-1.5 rounded-lg border border-white/10 text-gray-300">
+              <UserCheck className="w-3.5 h-3.5 text-[#f39c12]" />
+              جهاز واحد لكل طالب
+            </span>
           </div>
         </div>
 
@@ -404,43 +489,164 @@ export const AdminDashboardView: React.FC = () => {
         {activeAdminTab === 'students' && (
           <div className="space-y-6">
             
-            {/* Filter and Search Bar */}
-            <div className="bg-white dark:bg-[#162720] p-4 sm:p-6 rounded-2xl border border-emerald-900/10 dark:border-emerald-800/40 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
-              <div className="relative w-full md:w-80">
-                <input
-                  type="text"
-                  placeholder="بحث باسم الطالب أو الهاتف أو المحافظة..."
-                  value={searchStudentQuery}
-                  onChange={e => setSearchStudentQuery(e.target.value)}
-                  className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 dark:border-emerald-900/50 bg-gray-50 dark:bg-[#112019] text-xs font-bold focus:outline-hidden focus:border-[#2d6a4f]"
-                />
-                <Search className="w-4 h-4 text-gray-400 absolute right-3.5 top-3" />
+            {/* Top Monitoring KPI Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white dark:bg-[#162720] p-4 rounded-2xl border border-emerald-900/10 dark:border-emerald-800/40 shadow-xs flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-gray-500 dark:text-gray-400">إجمالي الطلاب</p>
+                  <p className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white mt-1">
+                    {studentRecords.length} <span className="text-xs font-normal text-gray-400">طالب</span>
+                  </p>
+                </div>
+                <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center text-[#2d6a4f] dark:text-emerald-400">
+                  <Users className="w-5 h-5" />
+                </div>
               </div>
 
-              <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
-                <select
-                  value={selectedGradeFilter}
-                  onChange={e => setSelectedGradeFilter(e.target.value)}
-                  className="px-3 py-2 rounded-xl border border-gray-200 dark:border-emerald-900/50 bg-gray-50 dark:bg-[#112019] text-xs font-bold"
-                >
-                  <option value="all">كل الصفوف الدراسية</option>
-                  <option value="second_general">تانية ثانوي (عام)</option>
-                  <option value="second_bac">تانية ثانوي (بكالوريا)</option>
-                  <option value="first_general">أولى ثانوي (عام)</option>
-                  <option value="first_bac">أولى ثانوي (بكالوريا)</option>
-                </select>
+              <div className="bg-white dark:bg-[#162720] p-4 rounded-2xl border border-amber-200 dark:border-amber-900/40 shadow-xs flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-amber-700 dark:text-amber-400">الطلاب المراكمون ⚠️</p>
+                  <p className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-300 mt-1">
+                    {studentRecords.filter(s => (s.accumulatedLessonsCount || 0) > 0 || s.laggingStatus === 'lagging' || s.laggingStatus === 'severely_lagging').length} <span className="text-xs font-normal text-amber-500/70">متأخر</span>
+                  </p>
+                </div>
+                <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-950 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                  <Hourglass className="w-5 h-5" />
+                </div>
+              </div>
 
-                <select
-                  value={selectedCommitmentFilter}
-                  onChange={e => setSelectedCommitmentFilter(e.target.value)}
-                  className="px-3 py-2 rounded-xl border border-gray-200 dark:border-emerald-900/50 bg-gray-50 dark:bg-[#112019] text-xs font-bold"
+              <div className="bg-white dark:bg-[#162720] p-4 rounded-2xl border border-emerald-900/10 dark:border-emerald-800/40 shadow-xs flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-gray-500 dark:text-gray-400">دقائق المشاهدة المنفذة</p>
+                  <p className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                    {studentRecords.reduce((acc, s) => acc + (s.watchedMinutes || s.completedLessonsCount * 45), 0)} <span className="text-xs font-normal text-gray-400">دقيقة</span>
+                  </p>
+                </div>
+                <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <Eye className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-[#162720] p-4 rounded-2xl border border-emerald-900/10 dark:border-emerald-800/40 shadow-xs flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-gray-500 dark:text-gray-400">امتحانات تم حلها</p>
+                  <p className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">
+                    {studentRecords.reduce((acc, s) => acc + s.completedQuizzesCount, 0)} <span className="text-xs font-normal text-gray-400">كويز</span>
+                  </p>
+                </div>
+                <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <FileCheck className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div className="bg-white dark:bg-[#162720] p-4 sm:p-6 rounded-2xl border border-emerald-900/10 dark:border-emerald-800/40 shadow-xs space-y-4">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="relative w-full md:w-80">
+                  <input
+                    type="text"
+                    placeholder="بحث باسم الطالب أو الهاتف أو المحافظة..."
+                    value={searchStudentQuery}
+                    onChange={e => setSearchStudentQuery(e.target.value)}
+                    className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 dark:border-emerald-900/50 bg-gray-50 dark:bg-[#112019] text-xs font-bold focus:outline-hidden focus:border-[#2d6a4f]"
+                  />
+                  <Search className="w-4 h-4 text-gray-400 absolute right-3.5 top-3" />
+                </div>
+
+                <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
+                  <select
+                    value={selectedGradeFilter}
+                    onChange={e => setSelectedGradeFilter(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-gray-200 dark:border-emerald-900/50 bg-gray-50 dark:bg-[#112019] text-xs font-bold"
+                  >
+                    <option value="all">كل الصفوف الدراسية</option>
+                    <option value="second_general">تانية ثانوي (عام)</option>
+                    <option value="second_bac">تانية ثانوي (بكالوريا)</option>
+                    <option value="first_general">أولى ثانوي (عام)</option>
+                    <option value="first_bac">أولى ثانوي (بكالوريا)</option>
+                  </select>
+
+                  <select
+                    value={selectedCommitmentFilter}
+                    onChange={e => setSelectedCommitmentFilter(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-gray-200 dark:border-emerald-900/50 bg-gray-50 dark:bg-[#112019] text-xs font-bold"
+                  >
+                    <option value="all">كل حالات الالتزام</option>
+                    <option value="ممتاز">ممتاز ⭐</option>
+                    <option value="جيد جداً">جيد جداً</option>
+                    <option value="يحتاج متابعة">يحتاج متابعة ⚠️</option>
+                    <option value="مقصر بالواجبات">مقصر بالواجبات ❌</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Quick Lagging Filter Chips */}
+              <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-emerald-900/30 flex-wrap">
+                <span className="text-xs font-bold text-gray-500 ml-1">تصفية التراكم:</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLaggingFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    selectedLaggingFilter === 'all'
+                      ? 'bg-[#1b4332] text-white shadow-xs'
+                      : 'bg-gray-100 dark:bg-[#112019] text-gray-600 dark:text-gray-400 hover:bg-gray-200'
+                  }`}
                 >
-                  <option value="all">كل حالات الالتزام</option>
-                  <option value="ممتاز">ممتاز ⭐</option>
-                  <option value="جيد جداً">جيد جداً</option>
-                  <option value="يحتاج متابعة">يحتاج متابعة ⚠️</option>
-                  <option value="مقصر بالواجبات">مقصر بالواجبات ❌</option>
-                </select>
+                  جميع الطلاب ({studentRecords.length})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedLaggingFilter('lagging_only')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    selectedLaggingFilter === 'lagging_only'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 hover:bg-amber-100'
+                  }`}
+                >
+                  <Hourglass className="w-3.5 h-3.5" />
+                  <span>المراكمون للمحاضرات ({studentRecords.filter(s => (s.accumulatedLessonsCount || 0) > 0).length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedLaggingFilter('severely_lagging')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    selectedLaggingFilter === 'severely_lagging'
+                      ? 'bg-red-600 text-white shadow-xs'
+                      : 'bg-red-50 dark:bg-red-950/50 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-900/50 hover:bg-red-100'
+                  }`}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>متأخرون بشدة (3+ حصص) ({studentRecords.filter(s => s.laggingStatus === 'severely_lagging').length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedLaggingFilter('up_to_date_only')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    selectedLaggingFilter === 'up_to_date_only'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50 hover:bg-emerald-100'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>ملتزمون ومواكبون ({studentRecords.filter(s => (s.accumulatedLessonsCount || 0) === 0).length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedLaggingFilter('blocked_only')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    selectedLaggingFilter === 'blocked_only'
+                      ? 'bg-red-700 text-white shadow-xs'
+                      : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-900/50 hover:bg-red-100'
+                  }`}
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                  <span>المحظورون يدوياً ({studentRecords.filter(s => !!s.isBlocked).length})</span>
+                </button>
               </div>
             </div>
 
@@ -450,14 +656,14 @@ export const AdminDashboardView: React.FC = () => {
                 <div>
                   <h3 className="font-bold text-base text-[#1b4332] dark:text-emerald-300 flex items-center gap-2">
                     <Users className="w-5 h-5 text-[#f39c12]" />
-                    <span>سجل متابعة حضور الحصص وحل الواجبات</span>
+                    <span>سجل متابعة حضور المحاضرات، دقائق المشاهدة ومين مراكم</span>
                   </h3>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    التحكم في فتح استثناء المحاضرات المقفولة وإرسال تقارير واتساب لأولياء الأمور
+                    متابعة دقيقة لكل طالب: عدد دقائق المشاهدة، عدد الامتحانات المحلولة، والحصص المتراكمة مع تقرير واتساب مباشر
                   </p>
                 </div>
                 <span className="text-xs bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold px-3 py-1 rounded-full">
-                  {filteredStudents.length} طالب
+                  {filteredStudents.length} طالب معروض
                 </span>
               </div>
 
@@ -467,122 +673,251 @@ export const AdminDashboardView: React.FC = () => {
                     <tr>
                       <th className="p-4">بيانات الطالب</th>
                       <th className="p-4">الصف والكورس</th>
-                      <th className="p-4">تقدم المحاضرات</th>
-                      <th className="p-4">متوسط الواجبات</th>
-                      <th className="p-4">حالة الالتزام</th>
+                      <th className="p-4">دقائق المشاهدة والحضور</th>
+                      <th className="p-4">حالة التراكم (مين مراكم؟)</th>
+                      <th className="p-4">حل الواجبات والكويزات</th>
+                      <th className="p-4">تقييم الالتزام</th>
+                      <th className="p-4">أمان الجهاز (جهاز واحد)</th>
                       <th className="p-4">متابعة ولي الأمر</th>
                       <th className="p-4 text-center">إجراءات الأدمن</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-emerald-900/20">
-                    {filteredStudents.map(std => {
-                      const progressPercentage = Math.round((std.completedLessonsCount / std.totalLessonsCount) * 100) || 0;
-                      
-                      return (
-                        <tr key={std.id} className="hover:bg-gray-50/70 dark:hover:bg-[#13221b] transition-colors">
-                          <td className="p-4">
-                            <p className="font-bold text-gray-900 dark:text-white text-sm">{std.studentName}</p>
-                            <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-1">
-                              <span className="font-mono">{std.studentPhone}</span>
-                              <span>•</span>
-                              <span>{std.governorate}</span>
-                            </div>
-                          </td>
-
-                          <td className="p-4">
-                            <span className="font-bold text-gray-800 dark:text-gray-200 block">{std.gradeLabel}</span>
-                            <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">{std.enrolledCourseTitle}</span>
-                          </td>
-
-                          <td className="p-4">
-                            <div className="space-y-1.5 w-32">
-                              <div className="flex items-center justify-between text-[11px] font-bold">
-                                <span>{std.completedLessonsCount} من {std.totalLessonsCount} حصص</span>
-                                <span className="text-emerald-600">{progressPercentage}%</span>
+                    {filteredStudents.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="p-8 text-center text-gray-400 text-sm">
+                          لا يوجد طلاب يطابقون شروط البحث والتصفية المحددة.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredStudents.map(std => {
+                        const progressPercentage = Math.round((std.completedLessonsCount / std.totalLessonsCount) * 100) || 0;
+                        const watched = std.watchedMinutes ?? (std.completedLessonsCount * 45);
+                        const totalMin = std.totalCourseMinutes ?? 360;
+                        const accumulated = std.accumulatedLessonsCount ?? Math.max(0, std.totalLessonsCount - std.completedLessonsCount);
+                        const missedQuizzes = std.missedQuizzesCount ?? Math.max(0, std.totalQuizzesCount - std.completedQuizzesCount);
+                        
+                        return (
+                          <tr key={std.id} className="hover:bg-gray-50/70 dark:hover:bg-[#13221b] transition-colors">
+                            <td className="p-4">
+                              <div className="flex items-center gap-2">
+                                <p className="font-bold text-gray-900 dark:text-white text-sm">{std.studentName}</p>
+                                {std.isBlocked && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 font-bold text-[10px] border border-red-300">
+                                    <UserX className="w-3 h-3" />
+                                    <span>محظور</span>
+                                  </span>
+                                )}
                               </div>
-                              <div className="w-full bg-gray-200 dark:bg-emerald-950 h-2 rounded-full overflow-hidden">
-                                <div 
-                                  className="bg-emerald-600 h-full rounded-full transition-all"
-                                  style={{ width: `${progressPercentage}%` }}
-                                />
+                              <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-1">
+                                <span className="font-mono">{std.studentPhone}</span>
+                                <span>•</span>
+                                <span>{std.governorate}</span>
                               </div>
-                            </div>
-                          </td>
+                              {std.isBlocked ? (
+                                <p className="text-[10px] text-red-600 dark:text-red-400 mt-0.5 font-bold">
+                                  سبب الحظر: {std.blockedReason || 'تراكم المحاضرات'}
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-gray-400 mt-0.5">آخر نشاط: {std.lastActivityDate}</p>
+                              )}
+                            </td>
 
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
-                              <span className={`font-black text-sm ${
-                                std.averageScore >= 85 ? 'text-emerald-600' : std.averageScore >= 60 ? 'text-amber-500' : 'text-red-500'
-                              }`}>
-                                {std.averageScore}%
-                              </span>
-                              <span className="text-[11px] text-gray-400">
-                                ({std.completedQuizzesCount} كويز)
-                              </span>
-                            </div>
-                          </td>
+                            <td className="p-4">
+                              <span className="font-bold text-gray-800 dark:text-gray-200 block">{std.gradeLabel}</span>
+                              <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">{std.enrolledCourseTitle}</span>
+                            </td>
 
-                          <td className="p-4">
-                            <select
-                              value={std.commitmentStatus}
-                              onChange={e => toggleStudentCommitment(std.id, e.target.value as any)}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
-                                std.commitmentStatus === 'ممتاز'
-                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                  : std.commitmentStatus === 'جيد جداً'
-                                  ? 'bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300'
-                                  : std.commitmentStatus === 'يحتاج متابعة'
-                                  ? 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300'
-                                  : 'bg-red-50 text-red-800 border-red-300 dark:bg-red-950/60 dark:text-red-300'
-                              }`}
-                            >
-                              <option value="ممتاز">ممتاز ⭐</option>
-                              <option value="جيد جداً">جيد جداً</option>
-                              <option value="يحتاج متابعة">يحتاج متابعة ⚠️</option>
-                              <option value="مقصر بالواجبات">مقصر بالواجبات ❌</option>
-                            </select>
-                          </td>
+                            {/* Watch Time and Completed Lessons */}
+                            <td className="p-4">
+                              <div className="space-y-1.5 w-36">
+                                <div className="flex items-center justify-between text-[11px] font-bold">
+                                  <span className="flex items-center gap-1 text-emerald-800 dark:text-emerald-300">
+                                    <Clock className="w-3 h-3 text-emerald-600" />
+                                    <span>{watched} دقيقة</span>
+                                  </span>
+                                  <span className="text-gray-400 font-normal">من {totalMin} د</span>
+                                </div>
+                                <div className="w-full bg-gray-200 dark:bg-emerald-950 h-2 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full transition-all ${
+                                      progressPercentage === 100 ? 'bg-emerald-500' : progressPercentage >= 50 ? 'bg-blue-500' : 'bg-amber-500'
+                                    }`}
+                                    style={{ width: `${progressPercentage}%` }}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between text-[10px] text-gray-500">
+                                  <span>شاهد {std.completedLessonsCount} من {std.totalLessonsCount} حصص</span>
+                                  <span className="font-bold text-emerald-600">{progressPercentage}%</span>
+                                </div>
+                              </div>
+                            </td>
 
-                          <td className="p-4">
-                            <a
-                              href={generateWhatsAppParentUrl(std)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-xs transition-colors"
-                            >
-                              <MessageCircle className="w-3.5 h-3.5" />
-                              <span>تقرير واتساب</span>
-                            </a>
-                          </td>
+                            {/* Lagging Status Badge */}
+                            <td className="p-4">
+                              {accumulated > 0 ? (
+                                <div className="space-y-1">
+                                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-black text-[11px] border ${
+                                    accumulated >= 3 || std.laggingStatus === 'severely_lagging'
+                                      ? 'bg-red-50 text-red-700 border-red-300 dark:bg-red-950/60 dark:text-red-300'
+                                      : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300'
+                                  }`}>
+                                    <Hourglass className="w-3.5 h-3.5 shrink-0" />
+                                    <span>مراكم ({accumulated} حصة)</span>
+                                  </span>
+                                  <p className="text-[10px] text-red-600 dark:text-red-400 font-bold">
+                                    {accumulated >= 3 ? '🚨 متأخر جداً عن المنهج' : '⚠️ يحتاج إنهاء الحصص'}
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="space-y-1">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-black text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span>مواكب للجدول (0 متراكم)</span>
+                                  </span>
+                                  <p className="text-[10px] text-emerald-600 font-bold">
+                                    {std.averageScore >= 90 ? '⭐ طالب متفوق' : '✅ منتظم'}
+                                  </p>
+                                </div>
+                              )}
+                            </td>
 
-                          <td className="p-4">
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                onClick={() => setSelectedStudentForUnlock(std)}
-                                className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 font-bold text-[11px] flex items-center gap-1 transition-colors"
-                                title="فك قفل محاضرة يدوياً كاستثناء"
+                            {/* Quiz Solving Progress */}
+                            <td className="p-4">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-gray-800 dark:text-gray-200 text-xs">
+                                    حل {std.completedQuizzesCount} من {std.totalQuizzesCount}
+                                  </span>
+                                  <span className={`font-black text-xs px-1.5 py-0.5 rounded-md ${
+                                    std.averageScore >= 85 
+                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' 
+                                      : std.averageScore >= 60 
+                                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' 
+                                      : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                                  }`}>
+                                    {std.averageScore}%
+                                  </span>
+                                </div>
+                                {missedQuizzes > 0 ? (
+                                  <p className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">
+                                    متبقي: {missedQuizzes} امتحان
+                                  </p>
+                                ) : (
+                                  <p className="text-[10px] text-emerald-600 font-bold">
+                                    أتم جميع الواجبات ✅
+                                  </p>
+                                )}
+                              </div>
+                            </td>
+
+                            <td className="p-4">
+                              <select
+                                value={std.commitmentStatus}
+                                onChange={e => toggleStudentCommitment(std.id, e.target.value as any)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                                  std.commitmentStatus === 'ممتاز'
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                    : std.commitmentStatus === 'جيد جداً'
+                                    ? 'bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300'
+                                    : std.commitmentStatus === 'يحتاج متابعة'
+                                    ? 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300'
+                                    : 'bg-red-50 text-red-800 border-red-300 dark:bg-red-950/60 dark:text-red-300'
+                                }`}
                               >
-                                <Unlock className="w-3.5 h-3.5" />
-                                <span>استثناء فك قفل</span>
-                              </button>
+                                <option value="ممتاز">ممتاز ⭐</option>
+                                <option value="جيد جداً">جيد جداً</option>
+                                <option value="يحتاج متابعة">يحتاج متابعة ⚠️</option>
+                                <option value="مقصر بالواجبات">مقصر بالواجبات ❌</option>
+                              </select>
+                            </td>
 
-                              <button
-                                onClick={() => deleteStudentRecord(std.id)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                                title="حذف الطالب"
+                            <td className="p-4">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1 text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                                  <Smartphone className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <span className="truncate max-w-[130px] font-mono text-[10px]">
+                                    {std.registeredDeviceName || 'جهاز غير محدد'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-900/40">
+                                    <Lock className="w-2.5 h-2.5" />
+                                    <span>مقفل</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => adminResetStudentDevice(std.studentId)}
+                                    className="text-[10px] text-amber-600 hover:text-amber-700 dark:text-amber-400 font-bold hover:underline flex items-center gap-0.5"
+                                    title="فك قفل الجهاز ليتمكن الطالب من الدخول بجهاز جديد"
+                                  >
+                                    <RefreshCw className="w-2.5 h-2.5" />
+                                    <span>إعادة ضبط</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="p-4">
+                              <a
+                                href={generateWhatsAppParentUrl(std)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-xs transition-colors"
                               >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                                <MessageCircle className="w-3.5 h-3.5" />
+                                <span>تقرير شامل</span>
+                              </a>
+                            </td>
+
+                            <td className="p-4">
+                              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                {std.isBlocked ? (
+                                  <button
+                                    onClick={() => handleUnblockStudent(std)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-800 dark:text-emerald-300 font-bold text-[11px] flex items-center gap-1 transition-colors border border-emerald-300 dark:border-emerald-800"
+                                    title="فك الحظر وتفعيل حساب الطالب"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>فك الحظر</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleOpenBlockModal(std)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-700 dark:text-red-400 font-bold text-[11px] flex items-center gap-1 transition-colors border border-red-200 dark:border-red-900/50"
+                                    title="حظر الطالب يدوياً لمنعه من الدخول بسبب التراكم"
+                                  >
+                                    <UserX className="w-3.5 h-3.5" />
+                                    <span>حظر يدوي</span>
+                                  </button>
+                                )}
+
+                                <button
+                                  onClick={() => setSelectedStudentForUnlock(std)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 font-bold text-[11px] flex items-center gap-1 transition-colors"
+                                  title="فك قفل محاضرة يدوياً كاستثناء"
+                                >
+                                  <Unlock className="w-3.5 h-3.5" />
+                                  <span>استثناء</span>
+                                </button>
+
+                                <button
+                                  onClick={() => deleteStudentRecord(std.id)}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                  title="حذف الطالب"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
-
           </div>
         )}
 
@@ -1042,6 +1377,87 @@ export const AdminDashboardView: React.FC = () => {
               >
                 <Unlock className="w-4 h-4" />
                 <span>تأكيد فك القفل للطالب</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Student Block Modal */}
+      {studentToBlockModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-[#15231c] rounded-3xl p-6 sm:p-8 max-w-md w-full text-right shadow-2xl border border-red-500/30 space-y-5">
+            <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
+              <div className="p-3 bg-red-100 dark:bg-red-950/60 rounded-2xl">
+                <UserX className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-black text-base text-gray-900 dark:text-white">
+                  حظر الطالب يدوياً من المنصة
+                </h3>
+                <p className="text-xs text-gray-500">
+                  قفل كامل للحساب ومنع فتح المحاضرات والدخول
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-red-50 dark:bg-red-950/40 rounded-2xl border border-red-200 dark:border-red-900/50 space-y-1 text-xs">
+              <p className="font-bold text-red-900 dark:text-red-200">
+                الطالب: <span className="font-black">{studentToBlockModal.studentName}</span>
+              </p>
+              <p className="text-gray-600 dark:text-gray-300">
+                رقم الطالب: <span className="font-mono">{studentToBlockModal.studentPhone}</span>
+              </p>
+              <p className="text-gray-600 dark:text-gray-300">
+                الحصص المتراكمة: <span className="font-bold text-red-600">{studentToBlockModal.accumulatedLessonsCount ?? 0} حصص</span>
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                سبب الحظر (سيظهر للطالب عند محاولة الدخول أو فتح الحصص):
+              </label>
+              <textarea
+                rows={3}
+                value={blockReasonInput}
+                onChange={e => setBlockReasonInput(e.target.value)}
+                placeholder="اكتب سبب الحظر هنا..."
+                className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-emerald-900/60 text-xs font-bold bg-white dark:bg-[#111f18] text-gray-900 dark:text-white focus:outline-hidden focus:border-red-500"
+              />
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                <span className="text-[11px] text-gray-400 font-bold">اقتراحات سريعة:</span>
+                <button
+                  type="button"
+                  onClick={() => setBlockReasonInput('تراكم المحاضرات والتأخر عن الجدول المحدد')}
+                  className="px-2 py-1 bg-gray-100 dark:bg-[#111f18] hover:bg-gray-200 text-gray-700 dark:text-gray-300 text-[10px] rounded-lg font-bold"
+                >
+                  تراكم محاضرات
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBlockReasonInput('عدم تسليم الواجبات والامتحانات الدورية')}
+                  className="px-2 py-1 bg-gray-100 dark:bg-[#111f18] hover:bg-gray-200 text-gray-700 dark:text-gray-300 text-[10px] rounded-lg font-bold"
+                >
+                  عدم حل الواجبات
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setStudentToBlockModal(null)}
+                className="w-1/3 py-2.5 rounded-xl border border-gray-300 dark:border-emerald-900/60 text-xs font-bold text-gray-700 dark:text-gray-300"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmBlock}
+                className="w-2/3 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <UserX className="w-4 h-4" />
+                <span>تأكيد حظر الطالب فوراً</span>
               </button>
             </div>
           </div>

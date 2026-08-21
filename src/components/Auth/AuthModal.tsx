@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { GradeLevel, Gender } from '../../types';
+import { GradeLevel, Gender, EGYPT_GOVERNORATES } from '../../types';
 import { TEACHER_IMAGE } from '../../data/mockData';
 import { 
   X, 
@@ -13,7 +13,11 @@ import {
   ArrowLeft, 
   ArrowRight,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  ShieldAlert,
+  Smartphone,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
@@ -24,6 +28,10 @@ export const AuthModal: React.FC = () => {
     openAuthModal, 
     login, 
     register,
+    deviceConflictInfo,
+    clearDeviceConflict,
+    forceTransferDevice,
+    currentDeviceInfo,
     addNotification 
   } = useApp();
 
@@ -99,8 +107,19 @@ export const AuthModal: React.FC = () => {
     e.preventDefault();
     setErrorMsg('');
     const success = login(loginPhone, loginPass);
-    if (!success) {
+    if (!success && !deviceConflictInfo) {
       setErrorMsg('بيانات الدخول غير صحيحة، يرجى التحقق من الرقم وكلمة المرور');
+    }
+  };
+
+  const handleTransferCurrentDevice = () => {
+    if (!loginPass) {
+      setErrorMsg('يرجى كتابة كلمة المرور لتأكيد قفل الحساب على جهازك الحالي');
+      return;
+    }
+    const success = forceTransferDevice(loginPhone, loginPass);
+    if (!success) {
+      setErrorMsg('تعذر نقل الحساب، يرجى التحقق من كلمة المرور');
     }
   };
 
@@ -111,7 +130,10 @@ export const AuthModal: React.FC = () => {
         {/* Top Decorative Green Bar */}
         <div className="bg-gradient-to-l from-[#1b4332] via-[#24533e] to-[#2d6a4f] p-4 text-white flex items-center justify-between">
           <button
-            onClick={closeAuthModal}
+            onClick={() => {
+              clearDeviceConflict();
+              closeAuthModal();
+            }}
             className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
             title="إغلاق النافذة"
             id="close-auth-modal"
@@ -130,7 +152,81 @@ export const AuthModal: React.FC = () => {
         {/* Modal Body Content */}
         <div className="p-6 sm:p-8 space-y-6">
           
-          {authModalMode === 'register' ? (
+          {deviceConflictInfo ? (
+            /* Single Device Conflict View */
+            <div className="space-y-5 animate-fadeIn">
+              <div className="text-center">
+                <div className="inline-flex items-center gap-2 bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 px-3.5 py-1.5 rounded-full text-xs font-black mb-2">
+                  <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  <span>تنبيه أمان قفل الجهاز</span>
+                </div>
+                <h3 className="text-xl font-black font-changa text-gray-900 dark:text-white">
+                  الحساب مرتبط ومقفل على جهاز آخر
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  حساب الطالب <span className="font-bold text-[#2d6a4f] dark:text-emerald-300">({deviceConflictInfo.studentName})</span> مسجل على جهاز سابق.
+                </p>
+              </div>
+
+              {/* Conflict details card */}
+              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 space-y-3 text-xs">
+                <div className="flex items-start gap-2.5">
+                  <Smartphone className="w-4 h-4 text-gray-500 mt-0.5 shrink-0" />
+                  <div>
+                    <span className="font-bold text-gray-700 dark:text-gray-300 block">الجهاز المسجل حالياً:</span>
+                    <span className="font-mono text-gray-900 dark:text-white font-bold">{deviceConflictInfo.registeredDeviceName}</span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 block">تاريخ الربط: {deviceConflictInfo.deviceLinkedAt}</span>
+                  </div>
+                </div>
+
+                <div className="h-px bg-amber-200 dark:bg-amber-900/40 my-1" />
+
+                <div className="flex items-start gap-2.5">
+                  <Smartphone className="w-4 h-4 text-[#2d6a4f] mt-0.5 shrink-0" />
+                  <div>
+                    <span className="font-bold text-gray-700 dark:text-gray-300 block">جهازك الحالي (هذا المتصفح):</span>
+                    <span className="font-mono text-[#2d6a4f] dark:text-emerald-300 font-bold">{deviceConflictInfo.currentDeviceName}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/40 text-blue-900 dark:text-blue-200 text-xs leading-relaxed space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-blue-600" />
+                  لماذا تمنع المنصة فتح الحساب على جهازين؟
+                </p>
+                <p className="text-[11px] text-blue-800 dark:text-blue-300">
+                  وفقاً لقواعد منصة القائد، يُسمح لكل طالب بجهاز واحد فقط لحماية الحصص والواجبات ومنع تبادل الحسابات. إذا قمت بنقل الحساب الآن، سيتم تسجيل الخروج فوراً وبشكل تلقائي من الجهاز السابق.
+                </p>
+              </div>
+
+              {errorMsg && (
+                <div className="p-2.5 rounded-xl bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 text-xs font-bold text-center">
+                  {errorMsg}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleTransferCurrentDevice}
+                  className="w-full py-3 px-4 rounded-xl bg-[#2d6a4f] hover:bg-[#1b4332] text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 active:scale-98"
+                >
+                  <RefreshCw className="w-4 h-4 text-[#ffbe76]" />
+                  <span>نقل الحساب وربطه بجهازي الحالي (وإنهاء الجهاز القديم)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={clearDeviceConflict}
+                  className="w-full py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-[#1f3529] dark:hover:bg-[#254233] text-gray-700 dark:text-gray-300 font-bold text-xs transition-all"
+                >
+                  إلغاء والعودة
+                </button>
+              </div>
+            </div>
+          ) : authModalMode === 'register' ? (
             /* Register Mode Form with 3 Steps */
             <div className="space-y-5">
               
@@ -145,6 +241,10 @@ export const AuthModal: React.FC = () => {
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   خطوة {step} من 3 • استمتع بالحفظ والفهم ومتابعة الدروس
                 </p>
+                <div className="mt-2 inline-flex items-center gap-1 text-[11px] text-emerald-800 dark:text-emerald-300 font-semibold bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-900/50">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>سيتم قفل الحساب تلقائياً على هذا الجهاز لضمان أمان دراستك</span>
+                </div>
               </div>
 
               {/* Progress Steps Indicators */}
@@ -159,7 +259,7 @@ export const AuthModal: React.FC = () => {
                         ? 'w-6 bg-[#2d6a4f]'
                         : 'w-4 bg-gray-200 dark:bg-emerald-950'
                     }`}
-                  ></div>
+                  />
                 ))}
               </div>
 
@@ -169,23 +269,26 @@ export const AuthModal: React.FC = () => {
                 </div>
               )}
 
-              {/* STEP 1: Grade and Name */}
+              {/* STEP 1: Grade + Name + Student Phone */}
               {step === 1 && (
                 <form onSubmit={handleStep1Next} className="space-y-4">
                   <div>
                     <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">
                       الصف الدراسي <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      value={selectedGrade}
-                      onChange={e => setSelectedGrade(e.target.value as GradeLevel)}
-                      className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-emerald-900/60 bg-white dark:bg-[#1b2c23] text-xs font-bold text-gray-900 dark:text-white focus:outline-hidden focus:border-[#2d6a4f]"
-                    >
-                      <option value="second_general">الصف الثاني الثانوي (عام - علم النفس والاجتماع)</option>
-                      <option value="second_bac">الصف الثاني الثانوي (بكالوريا - علم النفس والاجتماع)</option>
-                      <option value="first_general">الصف الأول الثانوي (عام)</option>
-                      <option value="first_bac">الصف الأول الثانوي (بكالوريا)</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={selectedGrade}
+                        onChange={e => setSelectedGrade(e.target.value as GradeLevel)}
+                        className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-emerald-900/60 bg-white dark:bg-[#1b2c23] text-xs font-bold text-gray-900 dark:text-white focus:outline-hidden focus:border-[#2d6a4f]"
+                      >
+                        <option value="first_general">الصف الأول الثانوي (عام)</option>
+                        <option value="second_general">الصف الثاني الثانوي (عام)</option>
+                        <option value="second_bac">الصف الثاني الثانوي (بكالوريا / أزهر)</option>
+                        <option value="third_general">الصف الثالث الثانوي (عام)</option>
+                      </select>
+                      <GraduationCap className="w-4 h-4 text-emerald-600 absolute left-3 top-3 pointer-events-none" />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -198,7 +301,7 @@ export const AuthModal: React.FC = () => {
                         required
                         value={firstName}
                         onChange={e => setFirstName(e.target.value)}
-                        placeholder="أحمد"
+                        placeholder="محمود"
                         className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-emerald-900/60 bg-white dark:bg-[#1b2c23] text-sm text-gray-900 dark:text-white focus:outline-hidden focus:border-[#2d6a4f]"
                       />
                     </div>
@@ -212,7 +315,7 @@ export const AuthModal: React.FC = () => {
                         required
                         value={lastName}
                         onChange={e => setLastName(e.target.value)}
-                        placeholder="محمود"
+                        placeholder="حمدي"
                         className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-emerald-900/60 bg-white dark:bg-[#1b2c23] text-sm text-gray-900 dark:text-white focus:outline-hidden focus:border-[#2d6a4f]"
                       />
                     </div>
@@ -228,7 +331,7 @@ export const AuthModal: React.FC = () => {
                         required
                         value={studentPhone}
                         onChange={e => setStudentPhone(e.target.value)}
-                        placeholder="01012345678"
+                        placeholder="01xxxxxxxxx"
                         className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-emerald-900/60 bg-white dark:bg-[#1b2c23] text-sm text-gray-900 dark:text-white focus:outline-hidden focus:border-[#2d6a4f] text-left ltr"
                       />
                       <Phone className="w-4 h-4 text-emerald-600 absolute left-3 top-3" />
@@ -237,15 +340,15 @@ export const AuthModal: React.FC = () => {
 
                   <button
                     type="submit"
-                    className="w-full py-3 rounded-xl bg-[#2d6a4f] hover:bg-[#1b4332] text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 active:scale-98"
+                    className="w-full py-3 rounded-xl bg-[#2d6a4f] hover:bg-[#1b4332] text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
                   >
-                    <span>متابعة الخطوة التالية</span>
+                    <span>التالي: بيانات ولي الأمر والمحافظة</span>
                     <ArrowLeft className="w-4 h-4" />
                   </button>
                 </form>
               )}
 
-              {/* STEP 2: Parent Phone & Gov */}
+              {/* STEP 2: Parent Phone + Complete 27 Governorates + Gender */}
               {step === 2 && (
                 <form onSubmit={handleStep2Next} className="space-y-4">
                   <div>
@@ -258,7 +361,7 @@ export const AuthModal: React.FC = () => {
                         required
                         value={parentPhone}
                         onChange={e => setParentPhone(e.target.value)}
-                        placeholder="01123456789"
+                        placeholder="01xxxxxxxxx"
                         className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-emerald-900/60 bg-white dark:bg-[#1b2c23] text-sm text-gray-900 dark:text-white focus:outline-hidden focus:border-[#2d6a4f] text-left ltr"
                       />
                       <Phone className="w-4 h-4 text-emerald-600 absolute left-3 top-3" />
@@ -267,24 +370,18 @@ export const AuthModal: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">
-                        المحافظة
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1 flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>المحافظة</span>
                       </label>
                       <select
                         value={governorate}
                         onChange={e => setGovernorate(e.target.value)}
                         className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-emerald-900/60 bg-white dark:bg-[#1b2c23] text-xs font-bold text-gray-900 dark:text-white focus:outline-hidden focus:border-[#2d6a4f]"
                       >
-                        <option value="قنا">قنا</option>
-                        <option value="القاهرة">القاهرة</option>
-                        <option value="الجيزة">الجيزة</option>
-                        <option value="الإسكندرية">الإسكندرية</option>
-                        <option value="الدقهلية">الدقهلية</option>
-                        <option value="الأقصر">الأقصر</option>
-                        <option value="أسوان">أسوان</option>
-                        <option value="أسيوط">أسيوط</option>
-                        <option value="سوهاج">سوهاج</option>
-                        <option value="المنيا">المنيا</option>
+                        {EGYPT_GOVERNORATES.map(gov => (
+                          <option key={gov} value={gov}>{gov}</option>
+                        ))}
                       </select>
                     </div>
 
@@ -294,7 +391,7 @@ export const AuthModal: React.FC = () => {
                       </label>
                       <select
                         value={gender}
-                        onChange={e => setGender(e.target.value as any)}
+                        onChange={e => setGender(e.target.value as Gender)}
                         className="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-emerald-900/60 bg-white dark:bg-[#1b2c23] text-xs font-bold text-gray-900 dark:text-white focus:outline-hidden focus:border-[#2d6a4f]"
                       >
                         <option value="male">ذكر</option>
@@ -313,9 +410,10 @@ export const AuthModal: React.FC = () => {
                     </button>
                     <button
                       type="submit"
-                      className="w-2/3 py-2.5 rounded-xl bg-[#2d6a4f] hover:bg-[#1b4332] text-white font-bold text-sm shadow-md transition-all"
+                      className="w-2/3 py-2.5 rounded-xl bg-[#2d6a4f] hover:bg-[#1b4332] text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
                     >
-                      التالي
+                      <span>التالي: كلمة السر</span>
+                      <ArrowLeft className="w-4 h-4" />
                     </button>
                   </div>
                 </form>
@@ -368,6 +466,11 @@ export const AuthModal: React.FC = () => {
                     </div>
                   )}
 
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-900/50 text-xs text-emerald-900 dark:text-emerald-200 flex items-start gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>عند إتمام التسجيل، سيتم ربط هذا الحساب بجهازك الحالي ({currentDeviceInfo.label}) لضمان أمان حسابك ومنع مشاركته.</span>
+                  </div>
+
                   <div className="flex items-center gap-3 pt-2">
                     <button
                       type="button"
@@ -378,9 +481,10 @@ export const AuthModal: React.FC = () => {
                     </button>
                     <button
                       type="submit"
-                      className="w-2/3 py-3 rounded-xl bg-[#2d6a4f] hover:bg-[#1b4332] text-white font-black text-sm shadow-md transition-all"
+                      className="w-2/3 py-3 rounded-xl bg-[#2d6a4f] hover:bg-[#1b4332] text-white font-black text-sm shadow-md transition-all flex items-center justify-center gap-2"
                     >
-                      انشئ الحساب الآن !!
+                      <span>انشئ الحساب الآن !</span>
+                      <CheckCircle2 className="w-4 h-4 text-[#ffbe76]" />
                     </button>
                   </div>
                 </form>
@@ -411,6 +515,10 @@ export const AuthModal: React.FC = () => {
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   أهلاً بك مجدداً في منصة مستر أحمد عبدالحميد
                 </p>
+                <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-gray-600 dark:text-gray-300 font-mono bg-gray-100 dark:bg-[#1d3026] px-2.5 py-1 rounded-lg border border-gray-200 dark:border-emerald-900/40">
+                  <Smartphone className="w-3.5 h-3.5 text-[#2d6a4f]" />
+                  <span>الجهاز الحالي: {currentDeviceInfo.label}</span>
+                </div>
               </div>
 
               {errorMsg && (

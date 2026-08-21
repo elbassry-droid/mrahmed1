@@ -61,13 +61,13 @@ export const FeaturesSection: React.FC = () => {
           {/* Feature 3 */}
           <div className="bg-white dark:bg-[#162720] p-6 rounded-2xl border border-emerald-900/10 dark:border-emerald-800/40 shadow-xs hover:border-[#2d6a4f] transition-all space-y-3">
             <div className="w-12 h-12 rounded-xl bg-[#e4f2ea] dark:bg-emerald-950/60 text-[#2d6a4f] dark:text-emerald-400 flex items-center justify-center">
-              <FileText className="w-6 h-6 text-cyan-600" />
+              <TrendingUp className="w-6 h-6 text-cyan-600" />
             </div>
             <h3 className="font-bold text-base text-[#1b4332] dark:text-emerald-200">
-              مذكرات PDF وخرائط ذهنية 📑
+              متابعة وإحصائيات تفاعلية 📊
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-              ملازم شاملة منسقة مع إمكانية التصفح التفاعلي وحفظ الملاحظات لسهولة مراجعة ليلة الامتحان.
+              تقارير دورية تتابع تقدمك ومعدل إنجاز الدروس ودرجات الامتحانات أولاً بأول بدقة متناهية.
             </p>
           </div>
 

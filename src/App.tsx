@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { initAntiDataExtraction } from './lib/dataProtection';
 import { Header } from './components/Header';
 import { HeroSection } from './components/Landing/HeroSection';
 import { FeaturesSection } from './components/Landing/FeaturesSection';
@@ -14,6 +15,7 @@ import { ExamsListView } from './components/Exams/ExamsListView';
 import { PdfsListView } from './components/PDF/PdfsListView';
 import { AdminDashboardView } from './components/Admin/AdminDashboardView';
 import { AuthModal } from './components/Auth/AuthModal';
+import { DeviceKickedModal } from './components/Auth/DeviceKickedModal';
 import { RechargeModal } from './components/Payment/RechargeModal';
 import { ProtectedVideoPlayer } from './components/Player/ProtectedVideoPlayer';
 import { InteractiveQuizModal } from './components/Quiz/InteractiveQuizModal';
@@ -34,11 +36,20 @@ const AppContent: React.FC = () => {
     activePdf,
     closePdf,
     notifications,
+    addNotification,
     removeNotification
   } = useApp();
 
+  // Initialize strict anti-data extraction & anti-scraping deterrence
+  useEffect(() => {
+    const cleanup = initAntiDataExtraction((warning) => {
+      addNotification(warning, 'warning');
+    });
+    return cleanup;
+  }, [addNotification]);
+
   return (
-    <div className="min-h-screen flex flex-col bg-white dark:bg-[#0e1b15] text-gray-900 dark:text-gray-100 transition-colors">
+    <div className="min-h-screen flex flex-col bg-white dark:bg-[#0e1b15] text-gray-900 dark:text-gray-100 transition-colors pb-16 md:pb-0">
       
       {/* Toast Notifications with flexible dismiss/skip */}
       {notifications.length > 0 && (
@@ -125,6 +136,7 @@ const AppContent: React.FC = () => {
 
       {/* Global Interactive Modals */}
       <AuthModal />
+      <DeviceKickedModal />
       <RechargeModal />
 
       {/* Protected Video Player Modal with Anti-Screen-Recording */}
